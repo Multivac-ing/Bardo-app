@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import express from "express";
 import http from "node:http";
 import os from "node:os";
@@ -9,40 +10,33 @@ import QRCode from "qrcode";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
-
 const PORT = Number(process.env.PORT || 3000);
-
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
 const clients = new Map();
+const hostToken = crypto.randomUUID();
 
 function getLanAddresses() {
-  const interfaces = os.networkInterfaces();
   const addresses = [];
-
-  for (const entries of Object.values(interfaces)) {
+  for (const entries of Object.values(os.networkInterfaces())) {
     for (const entry of entries || []) {
-      if (entry.family === "IPv4" && !entry.internal) {
-        addresses.push(entry.address);
-      }
+      if (entry.family === "IPv4" && !entry.internal) addresses.push(entry.address);
     }
   }
-
   return addresses;
 }
 
 function getPublicHost() {
-  const forcedHost = process.env.BARDO_HOST;
-  if (forcedHost) return forcedHost;
-
-  const [firstLanAddress] = getLanAddresses();
-  return firstLanAddress || "localhost";
+  return process.env.BARDO_HOST || getLanAddresses()[0] || "localhost";
 }
 
 function getJoinUrl() {
   return `http://${getPublicHost()}:${PORT}`;
+}
+
+function getHostUrl() {
+  return `http://localhost:${PORT}/?hostToken=${hostToken}`;
 }
 
 function getClientList() {
@@ -50,6 +44,7 @@ function getClientList() {
     id: client.id,
     connectedAt: client.connectedAt,
     label: client.label,
+    role: client.role,
     ready: client.ready,
     audioUnlocked: client.audioUnlocked,
     userAgent: client.userAgent,
@@ -64,14 +59,14 @@ function broadcastClients() {
 
 app.use(express.static(path.join(projectRoot, "client")));
 
-app.get("/api/config", async (_req, res) => {
+app.get("/api/config", async (req, res) => {
   const joinUrl = getJoinUrl();
-
   res.json({
     appName: "Bardo",
-    version: "0.0.1",
+    version: "0.0.2",
     joinUrl,
     qrDataUrl: await QRCode.toDataURL(joinUrl),
+    isHost: req.query.hostToken === hostToken,
     lanAddresses: getLanAddresses(),
     serverTime: Date.now()
   });
@@ -82,6 +77,7 @@ io.on("connection", (socket) => {
     id: socket.id,
     connectedAt: new Date().toISOString(),
     label: `Device ${clients.size + 1}`,
+    role: "phone",
     ready: false,
     audioUnlocked: false,
     userAgent: "",
@@ -90,13 +86,7 @@ io.on("connection", (socket) => {
   };
 
   clients.set(socket.id, client);
-
-  socket.emit("server:hello", {
-    id: socket.id,
-    serverTime: Date.now(),
-    joinUrl: getJoinUrl()
-  });
-
+  socket.emit("server:hello", { id: socket.id, serverTime: Date.now(), joinUrl: getJoinUrl() });
   broadcastClients();
 
   socket.on("client:profile", (payload = {}) => {
@@ -105,13 +95,13 @@ io.on("connection", (socket) => {
 
     current.userAgent = String(payload.userAgent || "");
     current.label = String(payload.label || current.label).slice(0, 80);
+    current.role = payload.hostToken === hostToken ? "host" : "phone";
     broadcastClients();
   });
 
   socket.on("client:ready", (payload = {}) => {
     const current = clients.get(socket.id);
-    if (!current) return;
-
+    if (!current || current.role !== "phone") return;
     current.ready = Boolean(payload.ready);
     current.audioUnlocked = Boolean(payload.audioUnlocked);
     broadcastClients();
@@ -127,38 +117,54 @@ io.on("connection", (socket) => {
 
   socket.on("client:sync-report", (payload = {}) => {
     const current = clients.get(socket.id);
-    if (!current) return;
-
-    current.clockOffsetMs = Number.isFinite(payload.clockOffsetMs)
-      ? Math.round(payload.clockOffsetMs)
-      : null;
-
-    current.latencyMs = Number.isFinite(payload.latencyMs)
-      ? Math.round(payload.latencyMs)
-      : null;
-
+    if (!current || current.role !== "phone") return;
+    current.clockOffsetMs = Number.isFinite(payload.clockOffsetMs) ? Math.round(payload.clockOffsetMs) : null;
+    current.latencyMs = Number.isFinite(payload.latencyMs) ? Math.round(payload.latencyMs) : null;
     broadcastClients();
   });
 
-  socket.on("host:play-test", () => {
-    const serverStartAt = Date.now() + 3000;
+  socket.on("host:play-test", (ack = () => {}) => {
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "host") {
+      ack({ ok: false, message: "Only the host can start a sync test." });
+      return;
+    }
 
-    io.emit("server:play-test", {
-      serverStartAt,
-      pattern: [
-        { frequency: 392, durationMs: 180 },
-        { frequency: 0, durationMs: 80 },
-        { frequency: 523.25, durationMs: 180 },
-        { frequency: 0, durationMs: 80 },
-        { frequency: 659.25, durationMs: 280 },
-        { frequency: 0, durationMs: 100 },
-        { frequency: 783.99, durationMs: 360 }
-      ]
-    });
+    const phones = [...clients.values()].filter((client) => client.role === "phone");
+    const unavailable = phones.filter((phone) => !phone.ready || !Number.isFinite(phone.clockOffsetMs));
+
+    if (!phones.length) {
+      ack({ ok: false, message: "No phones connected yet." });
+      return;
+    }
+    if (unavailable.length) {
+      ack({ ok: false, message: `${unavailable.length} phone(s) still need audio unlock and clock sync.` });
+      return;
+    }
+
+    const serverStartAt = Date.now() + 3000;
+    const pattern = [
+      { frequency: 392, durationMs: 180 }, { frequency: 0, durationMs: 80 },
+      { frequency: 523.25, durationMs: 180 }, { frequency: 0, durationMs: 80 },
+      { frequency: 659.25, durationMs: 280 }, { frequency: 0, durationMs: 100 },
+      { frequency: 783.99, durationMs: 360 }
+    ];
+    for (const phone of phones) {
+      io.to(phone.id).emit("server:play-test", { serverStartAt, pattern });
+    }
+    ack({ ok: true, phoneCount: phones.length });
   });
 
-  socket.on("host:stop", () => {
-    io.emit("server:stop");
+  socket.on("host:stop", (ack = () => {}) => {
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "host") {
+      ack({ ok: false, message: "Only the host can stop playback." });
+      return;
+    }
+    for (const phone of clients.values()) {
+      if (phone.role === "phone") io.to(phone.id).emit("server:stop");
+    }
+    ack({ ok: true });
   });
 
   socket.on("disconnect", () => {
@@ -170,7 +176,7 @@ io.on("connection", (socket) => {
 server.listen(PORT, "0.0.0.0", () => {
   console.log("");
   console.log("Bardo local server is running.");
-  console.log(`Host dashboard: http://localhost:${PORT}`);
+  console.log(`Host dashboard: ${getHostUrl()}`);
   console.log(`Phone join URL: ${getJoinUrl()}`);
   console.log("");
   console.log("Connect phones to the same WiFi and open the phone join URL.");
