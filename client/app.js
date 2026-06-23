@@ -25,6 +25,7 @@ const hostToken = new URLSearchParams(window.location.search).get("hostToken") |
 let isHost = false;
 let latestDevices = [];
 let playbackCalibrationMs = Number(localStorage.getItem("bardo-playback-calibration-ms") || 0);
+let clockSyncInFlight = false;
 
 function log(message) {
   const line = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -153,6 +154,9 @@ function median(values) {
 }
 
 async function runClockSync(sampleCount = 9) {
+  if (clockSyncInFlight) return;
+  clockSyncInFlight = true;
+
   const samples = [];
 
   for (let seq = 0; seq < sampleCount; seq += 1) {
@@ -199,6 +203,7 @@ async function runClockSync(sampleCount = 9) {
   if (!samples.length) {
     elements.syncStatus.textContent = "Clock sync failed.";
     log("Clock sync failed.");
+    clockSyncInFlight = false;
     return;
   }
 
@@ -219,6 +224,7 @@ async function runClockSync(sampleCount = 9) {
   });
 
   log(`Clock sync complete. Offset ${Math.round(clockOffsetMs)} ms, latency ${Math.round(latencyMs)} ms.`);
+  clockSyncInFlight = false;
 }
 
 function renderDevices(devices) {
@@ -391,3 +397,7 @@ loadConfig().catch((error) => {
 });
 
 updateCalibration(playbackCalibrationMs);
+
+setInterval(() => {
+  if (audioUnlocked && socket.connected) runClockSync(5);
+}, 30_000);

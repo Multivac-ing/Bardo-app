@@ -104,7 +104,7 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
 
     assert.deepEqual(await emitWithAck(host, "host:play-test"), {
       ok: false,
-      message: "1 phone(s) still need audio unlock and clock sync."
+      message: "1 phone(s) need audio unlock and a recent clock sync."
     });
 
     const phoneReady = waitForDevices(host, (devices) =>

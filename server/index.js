@@ -11,6 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const PORT = Number(process.env.PORT || 3000);
+const MAX_CLOCK_SYNC_AGE_MS = 45_000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -50,7 +51,8 @@ function getClientList() {
     userAgent: client.userAgent,
     clockOffsetMs: client.clockOffsetMs,
     latencyMs: client.latencyMs,
-    playbackCalibrationMs: client.playbackCalibrationMs
+    playbackCalibrationMs: client.playbackCalibrationMs,
+    lastSyncedAt: client.lastSyncedAt
   }));
 }
 
@@ -84,7 +86,8 @@ io.on("connection", (socket) => {
     userAgent: "",
     clockOffsetMs: null,
     latencyMs: null,
-    playbackCalibrationMs: 0
+    playbackCalibrationMs: 0,
+    lastSyncedAt: null
   };
 
   clients.set(socket.id, client);
@@ -125,6 +128,7 @@ io.on("connection", (socket) => {
     current.playbackCalibrationMs = Number.isFinite(payload.playbackCalibrationMs)
       ? Math.max(-200, Math.min(200, Math.round(payload.playbackCalibrationMs)))
       : 0;
+    current.lastSyncedAt = new Date().toISOString();
     broadcastClients();
   });
 
@@ -137,14 +141,20 @@ io.on("connection", (socket) => {
     }
 
     const phones = [...clients.values()].filter((client) => client.role === "phone");
-    const unavailable = phones.filter((phone) => !phone.ready || !Number.isFinite(phone.clockOffsetMs));
+    const unavailable = phones.filter(
+      (phone) =>
+        !phone.ready ||
+        !Number.isFinite(phone.clockOffsetMs) ||
+        !phone.lastSyncedAt ||
+        Date.now() - new Date(phone.lastSyncedAt).getTime() > MAX_CLOCK_SYNC_AGE_MS
+    );
 
     if (!phones.length) {
       respond({ ok: false, message: "No phones connected yet." });
       return;
     }
     if (unavailable.length) {
-      respond({ ok: false, message: `${unavailable.length} phone(s) still need audio unlock and clock sync.` });
+      respond({ ok: false, message: `${unavailable.length} phone(s) need audio unlock and a recent clock sync.` });
       return;
     }
 
