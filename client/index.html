@@ -16,7 +16,7 @@
       </section>
 
       <section class="grid">
-        <article class="card">
+        <article id="joinCard" class="card">
           <h2>Join from phones</h2>
           <div class="qr-wrap">
             <img id="qrImage" alt="QR code to join Bardo" />
@@ -33,10 +33,15 @@
           <button id="syncButton">Run clock sync</button>
         </article>
 
-        <article class="card">
+        <article id="hostCard" class="card" style="display: none;">
           <h2>Host controls</h2>
-          <p class="small">Every connected browser can control the demo in v0.</p>
+          <div style="margin-bottom: 1rem;">
+            <label for="audioUpload" style="display: block; margin-bottom: 0.5rem;" class="small">Upload Audio File (max 8MB):</label>
+            <input type="file" id="audioUpload" accept="audio/*" style="width: 100%; margin: 0; padding: 0.5rem;" />
+            <div id="uploadStatus" class="small" style="margin-top: 0.25rem;">No file uploaded.</div>
+          </div>
           <button id="playTestButton" class="primary">Sync test</button>
+          <button id="playAssetButton" class="primary" style="display: none;">Play asset</button>
           <button id="stopButton" class="danger">Stop</button>
         </article>
 
