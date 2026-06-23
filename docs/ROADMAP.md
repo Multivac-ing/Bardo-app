@@ -27,8 +27,7 @@
 ## v0.3 - Calibration
 
 - Test pulse.
-- Manual calibration slider per phone.
-- Save per-device offset in local storage.
+- Manual calibration slider per phone, saved locally.
 
 ## v1 - Acoustic intelligence
 

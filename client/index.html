@@ -31,6 +31,11 @@
           <p id="syncStatus" class="small">Clock sync pending.</p>
           <button id="unlockAudioButton" class="primary">Unlock audio</button>
           <button id="syncButton">Run clock sync</button>
+          <label class="calibration" for="calibrationInput">
+            Speaker calibration: <output id="calibrationValue">0 ms</output>
+            <input id="calibrationInput" type="range" min="-200" max="200" step="1" value="0" />
+          </label>
+          <p class="small">Positive values schedule this phone earlier. Use it only to correct an audible lag.</p>
         </article>
 
         <article class="card host-only">

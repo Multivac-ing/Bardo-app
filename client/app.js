@@ -7,6 +7,8 @@ const elements = {
   syncStatus: document.querySelector("#syncStatus"),
   unlockAudioButton: document.querySelector("#unlockAudioButton"),
   syncButton: document.querySelector("#syncButton"),
+  calibrationInput: document.querySelector("#calibrationInput"),
+  calibrationValue: document.querySelector("#calibrationValue"),
   playTestButton: document.querySelector("#playTestButton"),
   stopButton: document.querySelector("#stopButton"),
   sessionStatus: document.querySelector("#sessionStatus"),
@@ -22,6 +24,7 @@ let activeNodes = [];
 const hostToken = new URLSearchParams(window.location.search).get("hostToken") || "";
 let isHost = false;
 let latestDevices = [];
+let playbackCalibrationMs = Number(localStorage.getItem("bardo-playback-calibration-ms") || 0);
 
 function log(message) {
   const line = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -31,6 +34,21 @@ function log(message) {
 function getDeviceLabel() {
   const platform = navigator.userAgentData?.platform || navigator.platform || "Browser";
   return `${platform} / ${Math.random().toString(16).slice(2, 6)}`;
+}
+
+function updateCalibration(value) {
+  playbackCalibrationMs = Number(value);
+  elements.calibrationInput.value = String(playbackCalibrationMs);
+  elements.calibrationValue.textContent = `${playbackCalibrationMs} ms`;
+  localStorage.setItem("bardo-playback-calibration-ms", String(playbackCalibrationMs));
+
+  if (Number.isFinite(clockOffsetMs)) {
+    socket.emit("client:sync-report", {
+      clockOffsetMs,
+      latencyMs,
+      playbackCalibrationMs
+    });
+  }
 }
 
 async function loadConfig() {
@@ -196,7 +214,8 @@ async function runClockSync(sampleCount = 9) {
 
   socket.emit("client:sync-report", {
     clockOffsetMs,
-    latencyMs
+    latencyMs,
+    playbackCalibrationMs
   });
 
   log(`Clock sync complete. Offset ${Math.round(clockOffsetMs)} ms, latency ${Math.round(latencyMs)} ms.`);
@@ -230,12 +249,17 @@ function renderDevices(devices) {
         ? `${device.latencyMs}ms latency`
         : "no latency";
 
+      const calibrationText = device.playbackCalibrationMs
+        ? `${device.playbackCalibrationMs}ms advance`
+        : "no calibration";
+
       return `
         <div class="device">
           <strong>${escapeHtml(device.label || device.id)}</strong>
           <span class="badge ${readyClass}">${readyText}</span>
           <span class="badge">${offsetText}</span>
           <span class="badge ${latencyClass}">${latencyText}</span>
+          <span class="badge">${calibrationText}</span>
           <button class="compact danger" data-kick-id="${escapeHtml(device.id)}" type="button">Remove</button>
         </div>
       `;
@@ -272,6 +296,10 @@ elements.unlockAudioButton.addEventListener("click", async () => {
 
 elements.syncButton.addEventListener("click", () => {
   runClockSync();
+});
+
+elements.calibrationInput.addEventListener("input", (event) => {
+  updateCalibration(event.target.value);
 });
 
 elements.playTestButton.addEventListener("click", () => {
@@ -339,7 +367,7 @@ socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
     await runClockSync();
   }
 
-  const estimatedLocalStartPerfMs = serverStartAt - clockOffsetMs;
+  const estimatedLocalStartPerfMs = serverStartAt - clockOffsetMs - playbackCalibrationMs;
   const delaySeconds = Math.max(0.08, (estimatedLocalStartPerfMs - performance.now()) / 1000);
   const audioStartTime = ensureAudioContext().currentTime + delaySeconds;
 
@@ -361,3 +389,5 @@ socket.on("server:kicked", () => {
 loadConfig().catch((error) => {
   log(`Config error: ${error.message}`);
 });
+
+updateCalibration(playbackCalibrationMs);

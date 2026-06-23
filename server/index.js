@@ -49,7 +49,8 @@ function getClientList() {
     audioUnlocked: client.audioUnlocked,
     userAgent: client.userAgent,
     clockOffsetMs: client.clockOffsetMs,
-    latencyMs: client.latencyMs
+    latencyMs: client.latencyMs,
+    playbackCalibrationMs: client.playbackCalibrationMs
   }));
 }
 
@@ -82,7 +83,8 @@ io.on("connection", (socket) => {
     audioUnlocked: false,
     userAgent: "",
     clockOffsetMs: null,
-    latencyMs: null
+    latencyMs: null,
+    playbackCalibrationMs: 0
   };
 
   clients.set(socket.id, client);
@@ -120,6 +122,9 @@ io.on("connection", (socket) => {
     if (!current || current.role !== "phone") return;
     current.clockOffsetMs = Number.isFinite(payload.clockOffsetMs) ? Math.round(payload.clockOffsetMs) : null;
     current.latencyMs = Number.isFinite(payload.latencyMs) ? Math.round(payload.latencyMs) : null;
+    current.playbackCalibrationMs = Number.isFinite(payload.playbackCalibrationMs)
+      ? Math.max(-200, Math.min(200, Math.round(payload.playbackCalibrationMs)))
+      : 0;
     broadcastClients();
   });
 

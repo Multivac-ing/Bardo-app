@@ -112,11 +112,16 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
         (device) =>
           device.label === "Phone" &&
           device.ready &&
-          Number.isFinite(device.clockOffsetMs)
+          Number.isFinite(device.clockOffsetMs) &&
+          device.playbackCalibrationMs === 25
       )
     );
     phone.emit("client:ready", { ready: true, audioUnlocked: true });
-    phone.emit("client:sync-report", { clockOffsetMs: 4, latencyMs: 2 });
+    phone.emit("client:sync-report", {
+      clockOffsetMs: 4,
+      latencyMs: 2,
+      playbackCalibrationMs: 25
+    });
     await phoneReady;
 
     const playback = waitFor(phone, "server:play-test");
