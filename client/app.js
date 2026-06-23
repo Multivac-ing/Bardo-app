@@ -353,6 +353,32 @@ socket.on("disconnect", () => {
   log("Disconnected from Bardo server.");
 });
 
+document.addEventListener("visibilitychange", async () => {
+  if (isHost || !socket.connected) return;
+
+  if (document.hidden) {
+    socket.emit("client:ready", { ready: false, audioUnlocked });
+    elements.connectionStatus.textContent = "Paused while this tab is in the background.";
+    log("Marked unavailable while backgrounded.");
+    return;
+  }
+
+  if (!audioUnlocked) return;
+
+  try {
+    await ensureAudioContext().resume();
+    socket.emit("client:ready", { ready: true, audioUnlocked: true });
+    elements.connectionStatus.textContent = "Back in foreground. Re-syncing...";
+    log("Returned to foreground; refreshing clock sync.");
+    runClockSync(5);
+  } catch {
+    audioUnlocked = false;
+    socket.emit("client:ready", { ready: false, audioUnlocked: false });
+    elements.connectionStatus.textContent = "Tap Unlock audio after returning to this tab.";
+    log("Audio needs a new user unlock after foregrounding.");
+  }
+});
+
 socket.on("server:hello", (payload) => {
   log(`Server hello. Join URL: ${payload.joinUrl}`);
 });
