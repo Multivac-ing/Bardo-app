@@ -76,6 +76,10 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
     host.emit("client:profile", { label: "Host", hostToken });
     phone.emit("client:profile", { label: "Phone" });
 
+    host.emit("host:play-test", { unexpected: "payload" });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(host.connected, true);
+
     assert.deepEqual(await emitWithAck(host, "host:play-test"), {
       ok: false,
       message: "1 phone(s) still need audio unlock and clock sync."

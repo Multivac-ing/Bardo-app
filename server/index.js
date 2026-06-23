@@ -123,10 +123,11 @@ io.on("connection", (socket) => {
     broadcastClients();
   });
 
-  socket.on("host:play-test", (ack = () => {}) => {
+  socket.on("host:play-test", (ack) => {
+    const respond = typeof ack === "function" ? ack : () => {};
     const current = clients.get(socket.id);
     if (!current || current.role !== "host") {
-      ack({ ok: false, message: "Only the host can start a sync test." });
+      respond({ ok: false, message: "Only the host can start a sync test." });
       return;
     }
 
@@ -134,11 +135,11 @@ io.on("connection", (socket) => {
     const unavailable = phones.filter((phone) => !phone.ready || !Number.isFinite(phone.clockOffsetMs));
 
     if (!phones.length) {
-      ack({ ok: false, message: "No phones connected yet." });
+      respond({ ok: false, message: "No phones connected yet." });
       return;
     }
     if (unavailable.length) {
-      ack({ ok: false, message: `${unavailable.length} phone(s) still need audio unlock and clock sync.` });
+      respond({ ok: false, message: `${unavailable.length} phone(s) still need audio unlock and clock sync.` });
       return;
     }
 
@@ -152,19 +153,20 @@ io.on("connection", (socket) => {
     for (const phone of phones) {
       io.to(phone.id).emit("server:play-test", { serverStartAt, pattern });
     }
-    ack({ ok: true, phoneCount: phones.length });
+    respond({ ok: true, phoneCount: phones.length });
   });
 
-  socket.on("host:stop", (ack = () => {}) => {
+  socket.on("host:stop", (ack) => {
+    const respond = typeof ack === "function" ? ack : () => {};
     const current = clients.get(socket.id);
     if (!current || current.role !== "host") {
-      ack({ ok: false, message: "Only the host can stop playback." });
+      respond({ ok: false, message: "Only the host can stop playback." });
       return;
     }
     for (const phone of clients.values()) {
       if (phone.role === "phone") io.to(phone.id).emit("server:stop");
     }
-    ack({ ok: true });
+    respond({ ok: true });
   });
 
   socket.on("disconnect", () => {
