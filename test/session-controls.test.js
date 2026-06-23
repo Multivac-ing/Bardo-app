@@ -133,5 +133,12 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
     const stopped = waitFor(phone, "server:stop");
     assert.deepEqual(await emitWithAck(host, "host:stop"), { ok: true });
     await stopped;
+
+    const kicked = waitFor(phone, "server:kicked");
+    assert.deepEqual(
+      await emitWithAck(host, "host:kick-device", { id: phone.id }),
+      { ok: true, label: "Phone" }
+    );
+    await kicked;
   });
 });

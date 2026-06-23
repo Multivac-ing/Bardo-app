@@ -225,6 +225,7 @@ function renderDevices(devices) {
           <span class="badge ${readyClass}">${readyText}</span>
           <span class="badge">${offsetText}</span>
           <span class="badge">${latencyText}</span>
+          <button class="compact danger" data-kick-id="${escapeHtml(device.id)}" type="button">Remove</button>
         </div>
       `;
     })
@@ -279,6 +280,16 @@ elements.stopButton.addEventListener("click", () => {
   });
 });
 
+elements.devices.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-kick-id]");
+  if (!button) return;
+
+  socket.emit("host:kick-device", { id: button.dataset.kickId }, (result) => {
+    if (result?.ok) log(`Removed ${result.label}.`);
+    else log(result?.message || "Could not remove the phone.");
+  });
+});
+
 socket.on("connect", () => {
   elements.connectionStatus.textContent = "Connected.";
   log(`Connected as ${socket.id}.`);
@@ -328,6 +339,12 @@ socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
 socket.on("server:stop", () => {
   clearActiveNodes();
   log("Stopped.");
+});
+
+socket.on("server:kicked", () => {
+  socket.disconnect();
+  elements.connectionStatus.textContent = "Removed by the host.";
+  log("Removed by the host.");
 });
 
 loadConfig().catch((error) => {

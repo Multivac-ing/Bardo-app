@@ -169,6 +169,26 @@ io.on("connection", (socket) => {
     respond({ ok: true });
   });
 
+  socket.on("host:kick-device", (payload = {}, ack) => {
+    const respond = typeof ack === "function" ? ack : () => {};
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "host") {
+      respond({ ok: false, message: "Only the host can remove a phone." });
+      return;
+    }
+
+    const targetId = String(payload.id || "");
+    const target = clients.get(targetId);
+    if (!target || target.role !== "phone") {
+      respond({ ok: false, message: "That phone is no longer connected." });
+      return;
+    }
+
+    io.to(target.id).emit("server:kicked");
+    io.sockets.sockets.get(target.id)?.disconnect(true);
+    respond({ ok: true, label: target.label });
+  });
+
   socket.on("disconnect", () => {
     clients.delete(socket.id);
     broadcastClients();

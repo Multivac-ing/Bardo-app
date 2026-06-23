@@ -42,6 +42,12 @@ button.danger {
   background: #7f1d1d;
 }
 
+button.compact {
+  padding: 0.45rem 0.65rem;
+  margin: 0;
+  font-size: 0.78rem;
+}
+
 code {
   display: block;
   padding: 0.85rem;
@@ -137,7 +143,7 @@ h2 {
 
 .device {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto;
   gap: 0.75rem;
   align-items: center;
   padding: 0.8rem;

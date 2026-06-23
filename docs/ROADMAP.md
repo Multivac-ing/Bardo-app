@@ -22,7 +22,7 @@
 - Rename devices.
 - Show sync quality.
 - Show warnings for high-latency clients.
-- Kick/reconnect device controls.
+- Kick device controls.
 
 ## v0.3 - Calibration
 
