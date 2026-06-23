@@ -33,6 +33,24 @@ function waitForConnect(socket) {
   return socket.connected ? Promise.resolve() : once(socket, "connect");
 }
 
+function waitForDevices(socket, predicate) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.off("server:clients", handleClients);
+      reject(new Error("Timed out waiting for the expected device state."));
+    }, 2000);
+
+    function handleClients(devices) {
+      if (!predicate(devices)) return;
+      clearTimeout(timeout);
+      socket.off("server:clients", handleClients);
+      resolve(devices);
+    }
+
+    socket.on("server:clients", handleClients);
+  });
+}
+
 test("only the host can control a fully ready phone session", { timeout: 10_000 }, async (t) => {
   const server = spawn(process.execPath, ["server/index.js"], {
     env: { ...process.env, PORT: String(port) },
@@ -73,8 +91,12 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
     });
 
     await Promise.all([waitForConnect(host), waitForConnect(phone)]);
+    const phoneJoined = waitForDevices(host, (devices) =>
+      devices.some((device) => device.label === "Phone" && device.role === "phone")
+    );
     host.emit("client:profile", { label: "Host", hostToken });
     phone.emit("client:profile", { label: "Phone" });
+    await phoneJoined;
 
     host.emit("host:play-test", { unexpected: "payload" });
     await new Promise((resolve) => setTimeout(resolve, 25));
@@ -85,8 +107,17 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
       message: "1 phone(s) still need audio unlock and clock sync."
     });
 
+    const phoneReady = waitForDevices(host, (devices) =>
+      devices.some(
+        (device) =>
+          device.label === "Phone" &&
+          device.ready &&
+          Number.isFinite(device.clockOffsetMs)
+      )
+    );
     phone.emit("client:ready", { ready: true, audioUnlocked: true });
     phone.emit("client:sync-report", { clockOffsetMs: 4, latencyMs: 2 });
+    await phoneReady;
 
     const playback = waitFor(phone, "server:play-test");
     assert.deepEqual(await emitWithAck(host, "host:play-test"), { ok: true, phoneCount: 1 });
