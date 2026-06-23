@@ -18,6 +18,7 @@ let audioUnlocked = false;
 let clockOffsetMs = null;
 let latencyMs = null;
 let activeNodes = [];
+const hostToken = new URLSearchParams(window.location.search).get("hostToken") || "";
 
 function log(message) {
   const line = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -32,18 +33,13 @@ function getDeviceLabel() {
 async function loadConfig() {
   const response = await fetch("/api/config");
   const config = await response.json();
-
   elements.qrImage.src = config.qrDataUrl;
   elements.joinUrl.textContent = config.joinUrl;
-
   log(`Join URL: ${config.joinUrl}`);
 }
 
 function ensureAudioContext() {
-  if (!audioContext) {
-    audioContext = new AudioContext();
-  }
-
+  if (!audioContext) audioContext = new AudioContext();
   return audioContext;
 }
 
@@ -55,7 +51,6 @@ function clearActiveNodes() {
       // Ignore already stopped nodes.
     }
   }
-
   activeNodes = [];
 }
 
@@ -63,15 +58,12 @@ function playUnlockChirp() {
   const context = ensureAudioContext();
   const oscillator = context.createOscillator();
   const gain = context.createGain();
-
   oscillator.frequency.value = 660;
   gain.gain.setValueAtTime(0.0001, context.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.2, context.currentTime + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
-
   oscillator.connect(gain);
   gain.connect(context.destination);
-
   oscillator.start(context.currentTime);
   oscillator.stop(context.currentTime + 0.18);
 }
@@ -79,34 +71,26 @@ function playUnlockChirp() {
 function playPatternAt(audioStartTime, pattern) {
   const context = ensureAudioContext();
   clearActiveNodes();
-
   let cursorSeconds = 0;
 
   for (const step of pattern) {
     const durationSeconds = step.durationMs / 1000;
-
     if (step.frequency > 0) {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const start = audioStartTime + cursorSeconds;
       const end = start + durationSeconds;
-
       oscillator.type = "sine";
       oscillator.frequency.value = step.frequency;
-
       gain.gain.setValueAtTime(0.0001, start);
       gain.gain.exponentialRampToValueAtTime(0.34, start + 0.018);
       gain.gain.exponentialRampToValueAtTime(0.0001, Math.max(start + 0.02, end - 0.018));
-
       oscillator.connect(gain);
       gain.connect(context.destination);
-
       oscillator.start(start);
       oscillator.stop(end);
-
       activeNodes.push(oscillator);
     }
-
     cursorSeconds += durationSeconds;
   }
 }
@@ -114,52 +98,29 @@ function playPatternAt(audioStartTime, pattern) {
 function median(values) {
   const sorted = values.slice().sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 async function runClockSync(sampleCount = 9) {
   const samples = [];
-
   for (let seq = 0; seq < sampleCount; seq += 1) {
     const sample = await new Promise((resolve) => {
       const clientSentAt = performance.now();
-
-      socket.timeout(1500).emit(
-        "client:sync-ping",
-        { seq, clientSentAt },
-        () => {}
-      );
-
       function handlePong(payload) {
         if (payload.seq !== seq) return;
-
         socket.off("server:sync-pong", handlePong);
-
         const clientReceivedAt = performance.now();
         const rttMs = clientReceivedAt - clientSentAt;
-        const clientMidpointAt = clientSentAt + rttMs / 2;
-        const estimatedOffsetMs = payload.serverReceivedAt - clientMidpointAt;
-
-        resolve({
-          rttMs,
-          offsetMs: estimatedOffsetMs
-        });
+        resolve({ rttMs, offsetMs: payload.serverReceivedAt - (clientSentAt + rttMs / 2) });
       }
-
       socket.on("server:sync-pong", handlePong);
-
+      socket.emit("client:sync-ping", { seq, clientSentAt });
       setTimeout(() => {
         socket.off("server:sync-pong", handlePong);
         resolve(null);
       }, 1600);
     });
-
-    if (sample) {
-      samples.push(sample);
-    }
-
+    if (sample) samples.push(sample);
     await new Promise((resolve) => setTimeout(resolve, 80));
   }
 
@@ -169,21 +130,11 @@ async function runClockSync(sampleCount = 9) {
     return;
   }
 
-  const bestSamples = samples
-    .slice()
-    .sort((a, b) => a.rttMs - b.rttMs)
-    .slice(0, Math.max(3, Math.ceil(samples.length / 2)));
-
+  const bestSamples = samples.slice().sort((a, b) => a.rttMs - b.rttMs).slice(0, Math.max(3, Math.ceil(samples.length / 2)));
   clockOffsetMs = median(bestSamples.map((sample) => sample.offsetMs));
   latencyMs = median(bestSamples.map((sample) => sample.rttMs / 2));
-
-  elements.syncStatus.textContent = `Clock offset: ${Math.round(clockOffsetMs)} ms Â· latency: ${Math.round(latencyMs)} ms`;
-
-  socket.emit("client:sync-report", {
-    clockOffsetMs,
-    latencyMs
-  });
-
+  elements.syncStatus.textContent = `Clock offset: ${Math.round(clockOffsetMs)} ms · latency: ${Math.round(latencyMs)} ms`;
+  socket.emit("client:sync-report", { clockOffsetMs, latencyMs });
   log(`Clock sync complete. Offset ${Math.round(clockOffsetMs)} ms, latency ${Math.round(latencyMs)} ms.`);
 }
 
@@ -193,79 +144,56 @@ function renderDevices(devices) {
     return;
   }
 
-  elements.devices.innerHTML = devices
-    .map((device) => {
-      const readyClass = device.ready ? "ok" : "warn";
-      const readyText = device.ready ? "ready" : "locked";
-      const offsetText = Number.isFinite(device.clockOffsetMs)
-        ? `${device.clockOffsetMs}ms offset`
-        : "no sync";
-
-      const latencyText = Number.isFinite(device.latencyMs)
-        ? `${device.latencyMs}ms latency`
-        : "no latency";
-
-      return `
-        <div class="device">
-          <strong>${escapeHtml(device.label || device.id)}</strong>
-          <span class="badge ${readyClass}">${readyText}</span>
-          <span class="badge">${offsetText}</span>
-          <span class="badge">${latencyText}</span>
-        </div>
-      `;
-    })
-    .join("");
+  elements.devices.innerHTML = devices.map((device) => {
+    const readyClass = device.ready ? "ok" : "warn";
+    const readyText = device.ready ? "ready" : "locked";
+    const offsetText = Number.isFinite(device.clockOffsetMs) ? `${device.clockOffsetMs}ms offset` : "no sync";
+    const latencyText = Number.isFinite(device.latencyMs) ? `${device.latencyMs}ms latency` : "no latency";
+    return `
+      <div class="device">
+        <strong>${escapeHtml(device.label || device.id)}</strong>
+        <span class="badge ${readyClass}">${readyText}</span>
+        <span class="badge">${offsetText}</span>
+        <span class="badge">${latencyText}</span>
+      </div>
+    `;
+  }).join("");
 }
 
 function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 elements.unlockAudioButton.addEventListener("click", async () => {
   const context = ensureAudioContext();
   await context.resume();
-
   audioUnlocked = true;
   playUnlockChirp();
-
-  socket.emit("client:ready", {
-    ready: true,
-    audioUnlocked: true
-  });
-
+  socket.emit("client:ready", { ready: true, audioUnlocked: true });
   elements.connectionStatus.textContent = "Audio unlocked. Ready.";
   log("Audio unlocked.");
-
   await runClockSync();
 });
 
-elements.syncButton.addEventListener("click", () => {
-  runClockSync();
-});
+elements.syncButton.addEventListener("click", () => runClockSync());
 
 elements.playTestButton.addEventListener("click", () => {
-  socket.emit("host:play-test");
-  log("Requested synchronized test.");
+  socket.emit("host:play-test", (result) => {
+    if (result?.ok) log(`Sync test scheduled for ${result.phoneCount} phone(s).`);
+    else log(result?.message || "Could not start sync test.");
+  });
 });
 
 elements.stopButton.addEventListener("click", () => {
-  socket.emit("host:stop");
+  socket.emit("host:stop", (result) => {
+    if (!result?.ok) log(result?.message || "Could not stop playback.");
+  });
 });
 
 socket.on("connect", () => {
   elements.connectionStatus.textContent = "Connected.";
   log(`Connected as ${socket.id}.`);
-
-  socket.emit("client:profile", {
-    label: getDeviceLabel(),
-    userAgent: navigator.userAgent
-  });
-
+  socket.emit("client:profile", { label: getDeviceLabel(), userAgent: navigator.userAgent, hostToken });
   runClockSync(5);
 });
 
@@ -274,13 +202,8 @@ socket.on("disconnect", () => {
   log("Disconnected from Bardo server.");
 });
 
-socket.on("server:hello", (payload) => {
-  log(`Server hello. Join URL: ${payload.joinUrl}`);
-});
-
-socket.on("server:clients", (devices) => {
-  renderDevices(devices);
-});
+socket.on("server:hello", (payload) => log(`Server hello. Join URL: ${payload.joinUrl}`));
+socket.on("server:clients", (devices) => renderDevices(devices.filter((device) => device.role === "phone")));
 
 socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
   if (!audioUnlocked) {
@@ -288,16 +211,10 @@ socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
     log("Cannot play: audio is locked by browser policy.");
     return;
   }
-
-  if (!Number.isFinite(clockOffsetMs)) {
-    await runClockSync();
-  }
-
+  if (!Number.isFinite(clockOffsetMs)) await runClockSync();
   const estimatedLocalStartPerfMs = serverStartAt - clockOffsetMs;
   const delaySeconds = Math.max(0.08, (estimatedLocalStartPerfMs - performance.now()) / 1000);
-  const audioStartTime = ensureAudioContext().currentTime + delaySeconds;
-
-  playPatternAt(audioStartTime, pattern);
+  playPatternAt(ensureAudioContext().currentTime + delaySeconds, pattern);
   log(`Scheduled test in ${Math.round(delaySeconds * 1000)} ms.`);
 });
 
@@ -306,6 +223,4 @@ socket.on("server:stop", () => {
   log("Stopped.");
 });
 
-loadConfig().catch((error) => {
-  log(`Config error: ${error.message}`);
-});
+loadConfig().catch((error) => log(`Config error: ${error.message}`));
