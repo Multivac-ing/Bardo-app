@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bardo</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/socket.io/socket.io.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Local-first synchronized phone speaker experiment</p>
+        <h1>Bardo</h1>
+        <p class="subtitle">Turn phones on the same WiFi into one synchronized speaker group.</p>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Join from phones</h2>
+          <div class="qr-wrap">
+            <img id="qrImage" alt="QR code to join Bardo" />
+          </div>
+          <p class="small">Open this URL from every phone connected to the same WiFi:</p>
+          <code id="joinUrl">Loading...</code>
+        </article>
+
+        <article class="card">
+          <h2>This device</h2>
+          <p id="connectionStatus" class="status">Connecting...</p>
+          <p id="syncStatus" class="small">Clock sync pending.</p>
+          <button id="unlockAudioButton" class="primary">Unlock audio</button>
+          <button id="syncButton">Run clock sync</button>
+        </article>
+
+        <article class="card">
+          <h2>Host controls</h2>
+          <p class="small">Every connected browser can control the demo in v0.</p>
+          <button id="playTestButton" class="primary">Sync test</button>
+          <button id="stopButton" class="danger">Stop</button>
+        </article>
+
+        <article class="card wide">
+          <h2>Connected devices</h2>
+          <div id="devices" class="devices"></div>
+        </article>
+
+        <article class="card wide">
+          <h2>Log</h2>
+          <pre id="log"></pre>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
