@@ -5,10 +5,14 @@ const elements = {
   joinUrl: document.querySelector("#joinUrl"),
   connectionStatus: document.querySelector("#connectionStatus"),
   syncStatus: document.querySelector("#syncStatus"),
+  deviceNameInput: document.querySelector("#deviceNameInput"),
   unlockAudioButton: document.querySelector("#unlockAudioButton"),
   syncButton: document.querySelector("#syncButton"),
+  calibrationInput: document.querySelector("#calibrationInput"),
+  calibrationValue: document.querySelector("#calibrationValue"),
   playTestButton: document.querySelector("#playTestButton"),
   stopButton: document.querySelector("#stopButton"),
+  sessionStatus: document.querySelector("#sessionStatus"),
   devices: document.querySelector("#devices"),
   log: document.querySelector("#log")
 };
@@ -18,6 +22,11 @@ let audioUnlocked = false;
 let clockOffsetMs = null;
 let latencyMs = null;
 let activeNodes = [];
+const hostToken = new URLSearchParams(window.location.search).get("hostToken") || "";
+let isHost = false;
+let latestDevices = [];
+let playbackCalibrationMs = Number(localStorage.getItem("bardo-playback-calibration-ms") || 0);
+let clockSyncInFlight = false;
 
 function log(message) {
   const line = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -25,13 +34,52 @@ function log(message) {
 }
 
 function getDeviceLabel() {
+  const savedLabel = localStorage.getItem("bardo-device-label");
+  if (savedLabel) return savedLabel;
+
   const platform = navigator.userAgentData?.platform || navigator.platform || "Browser";
-  return `${platform} / ${Math.random().toString(16).slice(2, 6)}`;
+  const label = `${platform} / ${Math.random().toString(16).slice(2, 6)}`;
+  localStorage.setItem("bardo-device-label", label);
+  return label;
+}
+
+function sendProfile() {
+  socket.emit("client:profile", {
+    label: getDeviceLabel(),
+    userAgent: navigator.userAgent,
+    hostToken
+  });
+}
+
+function updateCalibration(value) {
+  playbackCalibrationMs = Number(value);
+  elements.calibrationInput.value = String(playbackCalibrationMs);
+  elements.calibrationValue.textContent = `${playbackCalibrationMs} ms`;
+  localStorage.setItem("bardo-playback-calibration-ms", String(playbackCalibrationMs));
+
+  if (Number.isFinite(clockOffsetMs)) {
+    socket.emit("client:sync-report", {
+      clockOffsetMs,
+      latencyMs,
+      playbackCalibrationMs
+    });
+  }
 }
 
 async function loadConfig() {
-  const response = await fetch("/api/config");
+  const response = await fetch(`/api/config${window.location.search}`);
   const config = await response.json();
+
+  isHost = config.isHost;
+  document.querySelectorAll(".host-only").forEach((element) => {
+    element.hidden = !isHost;
+  });
+
+  if (isHost) {
+    elements.unlockAudioButton.closest(".card").hidden = true;
+    elements.connectionStatus.textContent = "Host dashboard connected.";
+    renderDevices(latestDevices.filter((device) => device.role === "phone"));
+  }
 
   elements.qrImage.src = config.qrDataUrl;
   elements.joinUrl.textContent = config.joinUrl;
@@ -120,6 +168,9 @@ function median(values) {
 }
 
 async function runClockSync(sampleCount = 9) {
+  if (clockSyncInFlight) return;
+  clockSyncInFlight = true;
+
   const samples = [];
 
   for (let seq = 0; seq < sampleCount; seq += 1) {
@@ -166,6 +217,7 @@ async function runClockSync(sampleCount = 9) {
   if (!samples.length) {
     elements.syncStatus.textContent = "Clock sync failed.";
     log("Clock sync failed.");
+    clockSyncInFlight = false;
     return;
   }
 
@@ -181,13 +233,23 @@ async function runClockSync(sampleCount = 9) {
 
   socket.emit("client:sync-report", {
     clockOffsetMs,
-    latencyMs
+    latencyMs,
+    playbackCalibrationMs
   });
 
   log(`Clock sync complete. Offset ${Math.round(clockOffsetMs)} ms, latency ${Math.round(latencyMs)} ms.`);
+  clockSyncInFlight = false;
 }
 
 function renderDevices(devices) {
+  const readyDevices = devices.filter(
+    (device) => device.ready && Number.isFinite(device.clockOffsetMs)
+  );
+
+  elements.sessionStatus.textContent = devices.length
+    ? `${readyDevices.length} of ${devices.length} phone(s) ready.`
+    : "Waiting for phones...";
+
   if (!devices.length) {
     elements.devices.innerHTML = "<p class='small'>No devices connected.</p>";
     return;
@@ -195,22 +257,30 @@ function renderDevices(devices) {
 
   elements.devices.innerHTML = devices
     .map((device) => {
-      const readyClass = device.ready ? "ok" : "warn";
-      const readyText = device.ready ? "ready" : "locked";
+      const isSynced = Number.isFinite(device.clockOffsetMs);
+      const readyClass = device.ready && isSynced ? "ok" : "warn";
+      const readyText = device.ready ? (isSynced ? "ready" : "syncing") : "locked";
       const offsetText = Number.isFinite(device.clockOffsetMs)
         ? `${device.clockOffsetMs}ms offset`
         : "no sync";
 
+      const latencyClass = device.latencyMs > 80 ? "warn" : "";
       const latencyText = Number.isFinite(device.latencyMs)
         ? `${device.latencyMs}ms latency`
         : "no latency";
+
+      const calibrationText = device.playbackCalibrationMs
+        ? `${device.playbackCalibrationMs}ms advance`
+        : "no calibration";
 
       return `
         <div class="device">
           <strong>${escapeHtml(device.label || device.id)}</strong>
           <span class="badge ${readyClass}">${readyText}</span>
           <span class="badge">${offsetText}</span>
-          <span class="badge">${latencyText}</span>
+          <span class="badge ${latencyClass}">${latencyText}</span>
+          <span class="badge">${calibrationText}</span>
+          <button class="compact danger" data-kick-id="${escapeHtml(device.id)}" type="button">Remove</button>
         </div>
       `;
     })
@@ -248,25 +318,51 @@ elements.syncButton.addEventListener("click", () => {
   runClockSync();
 });
 
+elements.deviceNameInput.addEventListener("change", () => {
+  const label = elements.deviceNameInput.value.trim().slice(0, 24) || getDeviceLabel();
+  localStorage.setItem("bardo-device-label", label);
+  elements.deviceNameInput.value = label;
+  if (socket.connected) sendProfile();
+});
+
+elements.calibrationInput.addEventListener("input", (event) => {
+  updateCalibration(event.target.value);
+});
+
 elements.playTestButton.addEventListener("click", () => {
-  socket.emit("host:play-test");
-  log("Requested synchronized test.");
+  socket.emit("host:play-test", (result) => {
+    if (result?.ok) {
+      log(`Sync test scheduled for ${result.phoneCount} phone(s).`);
+      return;
+    }
+
+    log(result?.message || "Could not start sync test.");
+  });
 });
 
 elements.stopButton.addEventListener("click", () => {
-  socket.emit("host:stop");
+  socket.emit("host:stop", (result) => {
+    if (!result?.ok) log(result?.message || "Could not stop playback.");
+  });
+});
+
+elements.devices.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-kick-id]");
+  if (!button) return;
+
+  socket.emit("host:kick-device", { id: button.dataset.kickId }, (result) => {
+    if (result?.ok) log(`Removed ${result.label}.`);
+    else log(result?.message || "Could not remove the phone.");
+  });
 });
 
 socket.on("connect", () => {
   elements.connectionStatus.textContent = "Connected.";
   log(`Connected as ${socket.id}.`);
 
-  socket.emit("client:profile", {
-    label: getDeviceLabel(),
-    userAgent: navigator.userAgent
-  });
+  sendProfile();
 
-  runClockSync(5);
+  if (!isHost) runClockSync(5);
 });
 
 socket.on("disconnect", () => {
@@ -274,12 +370,39 @@ socket.on("disconnect", () => {
   log("Disconnected from Bardo server.");
 });
 
+document.addEventListener("visibilitychange", async () => {
+  if (isHost || !socket.connected) return;
+
+  if (document.hidden) {
+    socket.emit("client:ready", { ready: false, audioUnlocked });
+    elements.connectionStatus.textContent = "Paused while this tab is in the background.";
+    log("Marked unavailable while backgrounded.");
+    return;
+  }
+
+  if (!audioUnlocked) return;
+
+  try {
+    await ensureAudioContext().resume();
+    socket.emit("client:ready", { ready: true, audioUnlocked: true });
+    elements.connectionStatus.textContent = "Back in foreground. Re-syncing...";
+    log("Returned to foreground; refreshing clock sync.");
+    runClockSync(5);
+  } catch {
+    audioUnlocked = false;
+    socket.emit("client:ready", { ready: false, audioUnlocked: false });
+    elements.connectionStatus.textContent = "Tap Unlock audio after returning to this tab.";
+    log("Audio needs a new user unlock after foregrounding.");
+  }
+});
+
 socket.on("server:hello", (payload) => {
   log(`Server hello. Join URL: ${payload.joinUrl}`);
 });
 
 socket.on("server:clients", (devices) => {
-  renderDevices(devices);
+  latestDevices = devices;
+  if (isHost) renderDevices(latestDevices.filter((device) => device.role === "phone"));
 });
 
 socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
@@ -293,7 +416,7 @@ socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
     await runClockSync();
   }
 
-  const estimatedLocalStartPerfMs = serverStartAt - clockOffsetMs;
+  const estimatedLocalStartPerfMs = serverStartAt - clockOffsetMs - playbackCalibrationMs;
   const delaySeconds = Math.max(0.08, (estimatedLocalStartPerfMs - performance.now()) / 1000);
   const audioStartTime = ensureAudioContext().currentTime + delaySeconds;
 
@@ -306,6 +429,19 @@ socket.on("server:stop", () => {
   log("Stopped.");
 });
 
+socket.on("server:kicked", () => {
+  socket.disconnect();
+  elements.connectionStatus.textContent = "Removed by the host.";
+  log("Removed by the host.");
+});
+
 loadConfig().catch((error) => {
   log(`Config error: ${error.message}`);
 });
+
+updateCalibration(playbackCalibrationMs);
+elements.deviceNameInput.value = getDeviceLabel();
+
+setInterval(() => {
+  if (audioUnlocked && socket.connected) runClockSync(5);
+}, 30_000);

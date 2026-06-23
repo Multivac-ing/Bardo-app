@@ -6,12 +6,16 @@
   "private": true,
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node server/index.js"
+    "dev": "node server/index.js",
+    "test": "node --test"
   },
   "dependencies": {
     "express": "^4.19.2",
     "qrcode": "^1.5.4",
     "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
   },
   "engines": {
     "node": ">=18"

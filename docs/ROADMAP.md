@@ -19,16 +19,15 @@
 ## v0.2 - Better host dashboard
 
 - Host-only controls.
-- Rename devices.
+- Let each phone choose a persistent display name.
 - Show sync quality.
-- Show warnings for high-latency clients.
-- Kick/reconnect device controls.
+- Show session readiness and warnings for high-latency clients.
+- Kick device controls.
 
 ## v0.3 - Calibration
 
 - Test pulse.
-- Manual calibration slider per phone.
-- Save per-device offset in local storage.
+- Manual calibration slider per phone, saved locally.
 
 ## v1 - Acoustic intelligence
 

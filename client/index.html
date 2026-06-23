@@ -16,7 +16,7 @@
       </section>
 
       <section class="grid">
-        <article class="card">
+        <article class="card host-only">
           <h2>Join from phones</h2>
           <div class="qr-wrap">
             <img id="qrImage" alt="QR code to join Bardo" />
@@ -29,23 +29,33 @@
           <h2>This device</h2>
           <p id="connectionStatus" class="status">Connecting...</p>
           <p id="syncStatus" class="small">Clock sync pending.</p>
+          <label class="device-name" for="deviceNameInput">
+            Phone name
+            <input id="deviceNameInput" maxlength="24" autocomplete="nickname" />
+          </label>
           <button id="unlockAudioButton" class="primary">Unlock audio</button>
           <button id="syncButton">Run clock sync</button>
+          <label class="calibration" for="calibrationInput">
+            Speaker calibration: <output id="calibrationValue">0 ms</output>
+            <input id="calibrationInput" type="range" min="-200" max="200" step="1" value="0" />
+          </label>
+          <p class="small">Positive values schedule this phone earlier. Use it only to correct an audible lag.</p>
         </article>
 
-        <article class="card">
+        <article class="card host-only">
           <h2>Host controls</h2>
-          <p class="small">Every connected browser can control the demo in v0.</p>
+          <p class="small">Only this host dashboard can control the session.</p>
+          <p id="sessionStatus" class="status">Waiting for phones...</p>
           <button id="playTestButton" class="primary">Sync test</button>
           <button id="stopButton" class="danger">Stop</button>
         </article>
 
-        <article class="card wide">
+        <article class="card wide host-only">
           <h2>Connected devices</h2>
           <div id="devices" class="devices"></div>
         </article>
 
-        <article class="card wide">
+        <article class="card wide host-only">
           <h2>Log</h2>
           <pre id="log"></pre>
         </article>

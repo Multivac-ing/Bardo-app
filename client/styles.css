@@ -42,6 +42,12 @@ button.danger {
   background: #7f1d1d;
 }
 
+button.compact {
+  padding: 0.45rem 0.65rem;
+  margin: 0;
+  font-size: 0.78rem;
+}
+
 code {
   display: block;
   padding: 0.85rem;
@@ -103,6 +109,10 @@ h2 {
   grid-column: span 3;
 }
 
+.host-only[hidden] {
+  display: none;
+}
+
 .qr-wrap {
   display: grid;
   place-items: center;
@@ -126,6 +136,35 @@ h2 {
   font-weight: 800;
 }
 
+.calibration {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  color: #d4d4d8;
+  font-size: 0.9rem;
+}
+
+.calibration input {
+  width: 100%;
+}
+
+.device-name {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.8rem 0;
+  color: #d4d4d8;
+  font-size: 0.9rem;
+}
+
+.device-name input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: #18181b;
+  color: #f4f4f5;
+}
+
 .devices {
   display: grid;
   gap: 0.6rem;
@@ -133,7 +172,7 @@ h2 {
 
 .device {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto auto;
   gap: 0.75rem;
   align-items: center;
   padding: 0.8rem;
