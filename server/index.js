@@ -53,6 +53,7 @@ function getClientList() {
     ready: client.ready,
     audioUnlocked: client.audioUnlocked,
     userAgent: client.userAgent,
+    clientType: client.clientType,
     clockOffsetMs: client.clockOffsetMs,
     latencyMs: client.latencyMs
   }));
@@ -63,6 +64,10 @@ function broadcastClients() {
 }
 
 app.use(express.static(path.join(projectRoot, "client")));
+
+app.get("/lab", (_req, res) => {
+  res.sendFile(path.join(projectRoot, "client", "lab.html"));
+});
 
 app.get("/api/config", async (_req, res) => {
   const joinUrl = getJoinUrl();
@@ -85,11 +90,13 @@ io.on("connection", (socket) => {
     ready: false,
     audioUnlocked: false,
     userAgent: "",
+    clientType: "phone",
     clockOffsetMs: null,
     latencyMs: null
   };
 
   clients.set(socket.id, client);
+  console.log(`[client connected] ${client.label} (${socket.id})`);
 
   socket.emit("server:hello", {
     id: socket.id,
@@ -105,6 +112,8 @@ io.on("connection", (socket) => {
 
     current.userAgent = String(payload.userAgent || "");
     current.label = String(payload.label || current.label).slice(0, 80);
+    current.clientType = payload.clientType === "simulator" ? "simulator" : "phone";
+    console.log(`[client profile] ${current.label} (${current.clientType})`);
     broadcastClients();
   });
 
@@ -114,10 +123,14 @@ io.on("connection", (socket) => {
 
     current.ready = Boolean(payload.ready);
     current.audioUnlocked = Boolean(payload.audioUnlocked);
+    console.log(
+      `[client ready] ${current.label}: ready=${current.ready} audioUnlocked=${current.audioUnlocked}`
+    );
     broadcastClients();
   });
 
   socket.on("client:sync-ping", (payload = {}) => {
+    console.log(`[sync ping] ${clients.get(socket.id)?.label || socket.id} seq=${payload.seq ?? "?"}`);
     socket.emit("server:sync-pong", {
       seq: payload.seq,
       clientSentAt: payload.clientSentAt,
@@ -137,6 +150,10 @@ io.on("connection", (socket) => {
       ? Math.round(payload.latencyMs)
       : null;
 
+    console.log(
+      `[sync report] ${current.label}: offset=${current.clockOffsetMs ?? "unknown"}ms latency=${current.latencyMs ?? "unknown"}ms`
+    );
+
     broadcastClients();
   });
 
@@ -155,13 +172,28 @@ io.on("connection", (socket) => {
         { frequency: 783.99, durationMs: 360 }
       ]
     });
+    console.log(`[play-test] sent to ${clients.size} client(s), start=${serverStartAt}`);
   });
 
   socket.on("host:stop", () => {
     io.emit("server:stop");
+    console.log(`[stop] sent to ${clients.size} client(s)`);
+  });
+
+  socket.on("client:play-test-received", (payload = {}) => {
+    const current = clients.get(socket.id);
+    if (!current) return;
+    console.log(`[play-test received] ${current.label} start=${payload.serverStartAt ?? "unknown"}`);
+  });
+
+  socket.on("client:stop-received", () => {
+    const current = clients.get(socket.id);
+    if (!current) return;
+    console.log(`[stop received] ${current.label}`);
   });
 
   socket.on("disconnect", () => {
+    console.log(`[client disconnected] ${clients.get(socket.id)?.label || socket.id}`);
     clients.delete(socket.id);
     broadcastClients();
   });

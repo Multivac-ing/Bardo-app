@@ -283,6 +283,8 @@ socket.on("server:clients", (devices) => {
 });
 
 socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
+  socket.emit("client:play-test-received", { serverStartAt });
+
   if (!audioUnlocked) {
     elements.connectionStatus.textContent = "Tap Unlock audio before playing.";
     log("Cannot play: audio is locked by browser policy.");
@@ -303,6 +305,7 @@ socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
 
 socket.on("server:stop", () => {
   clearActiveNodes();
+  socket.emit("client:stop-received");
   log("Stopped.");
 });
 

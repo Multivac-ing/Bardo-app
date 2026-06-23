@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bardo simulation lab</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/socket.io/socket.io.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Local simulation</p>
+        <h1 class="lab-title">Bardo Lab</h1>
+        <p class="subtitle">Exercise coordination with browser-based fake phones. No audio is played here.</p>
+      </section>
+
+      <section class="grid">
+        <article class="card wide">
+          <h2>Host controls</h2>
+          <label class="small" for="phoneCount">Simulated phones</label>
+          <input id="phoneCount" type="number" min="1" max="50" value="5" />
+          <button id="createButton" class="primary">Create simulated phones</button>
+          <button id="readyButton">Mark all ready</button>
+          <button id="syncButton">Run clock sync</button>
+          <button id="playButton" class="primary">Sync test</button>
+          <button id="stopButton" class="danger">Stop</button>
+          <button id="disconnectButton">Disconnect all</button>
+          <p id="labStatus" class="status">No simulated phones yet.</p>
+        </article>
+
+        <article class="card wide">
+          <h2>Simulated phones</h2>
+          <div id="phones" class="phone-grid"></div>
+        </article>
+
+        <article class="card wide">
+          <h2>Lab log</h2>
+          <pre id="log"></pre>
+        </article>
+      </section>
+    </main>
+    <script type="module" src="/lab.js"></script>
+  </body>
+</html>

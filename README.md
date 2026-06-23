@@ -54,19 +54,46 @@ Install dependencies:
 npm install
 ```
 
-Start the local server:
+Start the local server on port 3001:
 
 ```bash
-npm start
+PORT=3001 npm start
 ```
 
 Open the host dashboard on the computer:
 
 ```text
-http://localhost:3000
+http://localhost:3001
 ```
 
 Then open the LAN URL shown by the app from every phone connected to the same WiFi.
+
+## Simulation lab
+
+The lab makes browser-based fake phones so development can validate connection,
+ready state, clock sync, play-test, and stop coordination without waiting for
+real devices. Start the server as above, then open:
+
+```text
+http://localhost:3001/lab
+```
+
+Choose the number of simulated phones (five by default), create them, mark them
+ready, run clock sync, and use **Sync test** or **Stop**. The cards and server
+logs show each event.
+
+For a Node-based simulation, in another terminal run:
+
+```bash
+BARDO_URL=http://localhost:3001 npm run simulate -- 5
+```
+
+`BARDO_URL` is optional and defaults to `http://localhost:3001`. Press Ctrl+C
+to disconnect the fake clients.
+
+Simulation validates Socket.IO coordination and scheduling messages. It does
+not validate real speaker synchronization, browser audio policies, or WiFi
+timing; keep a real-phone pass for those later.
 
 ## First demo flow
 
