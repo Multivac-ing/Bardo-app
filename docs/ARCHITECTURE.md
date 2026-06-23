@@ -32,6 +32,8 @@ Each client sends multiple ping samples to estimate:
 - round-trip time;
 - approximate client/server clock offset.
 
+Unlocked phones refresh that estimate periodically. The server rejects a playback request when any connected phone has not reported a recent sync, rather than scheduling against an old clock estimate.
+
 When the host presses Sync test, the server broadcasts a future server timestamp.
 
 Each client converts that timestamp into its local `performance.now()` clock and schedules Web Audio playback.
