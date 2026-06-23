@@ -17,6 +17,12 @@ Phones
       └─ Web Audio scheduled playback
 ```
 
+## Session control
+
+When the server starts, it creates an in-memory host token and prints a localhost-only dashboard URL containing it. Phone join URLs never include that token. The server authorizes control messages itself, so hiding host buttons in the phone UI is not the security boundary.
+
+Before a test can start, every connected phone must have unlocked audio and reported a clock-sync result. Playback and stop events are emitted only to phone sockets.
+
 ## Timing approach
 
 The server is the shared clock authority.
