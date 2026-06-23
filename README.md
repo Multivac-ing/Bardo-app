@@ -60,6 +60,12 @@ Start the local server:
 npm start
 ```
 
+Run the automated session checks:
+
+```bash
+npm test
+```
+
 Open the **Host dashboard URL printed in the terminal** on the computer. It includes a one-time local host key; keep it private from guests:
 
 ```text
@@ -77,6 +83,8 @@ Then open the LAN URL shown by the app from every phone connected to the same Wi
 5. Wait until clients show as ready.
 6. Press **Sync test** from the host.
 7. All phones should play the same short pattern together.
+
+Keep every phone tab in the foreground during the test. If a phone returns from the background, wait for it to show as ready again before starting playback.
 
 ## Repository structure
 
