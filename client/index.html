@@ -29,6 +29,10 @@
           <h2>This device</h2>
           <p id="connectionStatus" class="status">Connecting...</p>
           <p id="syncStatus" class="small">Clock sync pending.</p>
+          <label class="device-name" for="deviceNameInput">
+            Phone name
+            <input id="deviceNameInput" maxlength="24" autocomplete="nickname" />
+          </label>
           <button id="unlockAudioButton" class="primary">Unlock audio</button>
           <button id="syncButton">Run clock sync</button>
           <label class="calibration" for="calibrationInput">

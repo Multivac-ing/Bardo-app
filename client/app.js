@@ -5,6 +5,7 @@ const elements = {
   joinUrl: document.querySelector("#joinUrl"),
   connectionStatus: document.querySelector("#connectionStatus"),
   syncStatus: document.querySelector("#syncStatus"),
+  deviceNameInput: document.querySelector("#deviceNameInput"),
   unlockAudioButton: document.querySelector("#unlockAudioButton"),
   syncButton: document.querySelector("#syncButton"),
   calibrationInput: document.querySelector("#calibrationInput"),
@@ -33,8 +34,21 @@ function log(message) {
 }
 
 function getDeviceLabel() {
+  const savedLabel = localStorage.getItem("bardo-device-label");
+  if (savedLabel) return savedLabel;
+
   const platform = navigator.userAgentData?.platform || navigator.platform || "Browser";
-  return `${platform} / ${Math.random().toString(16).slice(2, 6)}`;
+  const label = `${platform} / ${Math.random().toString(16).slice(2, 6)}`;
+  localStorage.setItem("bardo-device-label", label);
+  return label;
+}
+
+function sendProfile() {
+  socket.emit("client:profile", {
+    label: getDeviceLabel(),
+    userAgent: navigator.userAgent,
+    hostToken
+  });
 }
 
 function updateCalibration(value) {
@@ -304,6 +318,13 @@ elements.syncButton.addEventListener("click", () => {
   runClockSync();
 });
 
+elements.deviceNameInput.addEventListener("change", () => {
+  const label = elements.deviceNameInput.value.trim().slice(0, 24) || getDeviceLabel();
+  localStorage.setItem("bardo-device-label", label);
+  elements.deviceNameInput.value = label;
+  if (socket.connected) sendProfile();
+});
+
 elements.calibrationInput.addEventListener("input", (event) => {
   updateCalibration(event.target.value);
 });
@@ -339,11 +360,7 @@ socket.on("connect", () => {
   elements.connectionStatus.textContent = "Connected.";
   log(`Connected as ${socket.id}.`);
 
-  socket.emit("client:profile", {
-    label: getDeviceLabel(),
-    userAgent: navigator.userAgent,
-    hostToken
-  });
+  sendProfile();
 
   if (!isHost) runClockSync(5);
 });
@@ -423,6 +440,7 @@ loadConfig().catch((error) => {
 });
 
 updateCalibration(playbackCalibrationMs);
+elements.deviceNameInput.value = getDeviceLabel();
 
 setInterval(() => {
   if (audioUnlocked && socket.connected) runClockSync(5);

@@ -19,7 +19,7 @@
 ## v0.2 - Better host dashboard
 
 - Host-only controls.
-- Rename devices.
+- Let each phone choose a persistent display name.
 - Show sync quality.
 - Show session readiness and warnings for high-latency clients.
 - Kick device controls.

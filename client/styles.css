@@ -148,6 +148,23 @@ h2 {
   width: 100%;
 }
 
+.device-name {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.8rem 0;
+  color: #d4d4d8;
+  font-size: 0.9rem;
+}
+
+.device-name input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: #18181b;
+  color: #f4f4f5;
+}
+
 .devices {
   display: grid;
   gap: 0.6rem;
