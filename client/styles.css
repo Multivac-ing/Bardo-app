@@ -103,6 +103,10 @@ h2 {
   grid-column: span 3;
 }
 
+.host-only[hidden] {
+  display: none;
+}
+
 .qr-wrap {
   display: grid;
   place-items: center;

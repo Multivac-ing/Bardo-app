@@ -60,13 +60,13 @@ Start the local server:
 npm start
 ```
 
-Open the host dashboard on the computer:
+Open the **Host dashboard URL printed in the terminal** on the computer. It includes a one-time local host key; keep it private from guests:
 
 ```text
-http://localhost:3000
+http://localhost:3000/?hostToken=...
 ```
 
-Then open the LAN URL shown by the app from every phone connected to the same WiFi.
+Then open the LAN URL shown by the app from every phone connected to the same WiFi. It joins in phone mode and cannot control playback.
 
 ## First demo flow
 
