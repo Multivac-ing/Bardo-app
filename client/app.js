@@ -9,6 +9,7 @@ const elements = {
   syncButton: document.querySelector("#syncButton"),
   playTestButton: document.querySelector("#playTestButton"),
   stopButton: document.querySelector("#stopButton"),
+  sessionStatus: document.querySelector("#sessionStatus"),
   devices: document.querySelector("#devices"),
   log: document.querySelector("#log")
 };
@@ -202,6 +203,14 @@ async function runClockSync(sampleCount = 9) {
 }
 
 function renderDevices(devices) {
+  const readyDevices = devices.filter(
+    (device) => device.ready && Number.isFinite(device.clockOffsetMs)
+  );
+
+  elements.sessionStatus.textContent = devices.length
+    ? `${readyDevices.length} of ${devices.length} phone(s) ready.`
+    : "Waiting for phones...";
+
   if (!devices.length) {
     elements.devices.innerHTML = "<p class='small'>No devices connected.</p>";
     return;
@@ -209,12 +218,14 @@ function renderDevices(devices) {
 
   elements.devices.innerHTML = devices
     .map((device) => {
-      const readyClass = device.ready ? "ok" : "warn";
-      const readyText = device.ready ? "ready" : "locked";
+      const isSynced = Number.isFinite(device.clockOffsetMs);
+      const readyClass = device.ready && isSynced ? "ok" : "warn";
+      const readyText = device.ready ? (isSynced ? "ready" : "syncing") : "locked";
       const offsetText = Number.isFinite(device.clockOffsetMs)
         ? `${device.clockOffsetMs}ms offset`
         : "no sync";
 
+      const latencyClass = device.latencyMs > 80 ? "warn" : "";
       const latencyText = Number.isFinite(device.latencyMs)
         ? `${device.latencyMs}ms latency`
         : "no latency";
@@ -224,7 +235,7 @@ function renderDevices(devices) {
           <strong>${escapeHtml(device.label || device.id)}</strong>
           <span class="badge ${readyClass}">${readyText}</span>
           <span class="badge">${offsetText}</span>
-          <span class="badge">${latencyText}</span>
+          <span class="badge ${latencyClass}">${latencyText}</span>
           <button class="compact danger" data-kick-id="${escapeHtml(device.id)}" type="button">Remove</button>
         </div>
       `;

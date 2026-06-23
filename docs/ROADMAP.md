@@ -21,7 +21,7 @@
 - Host-only controls.
 - Rename devices.
 - Show sync quality.
-- Show warnings for high-latency clients.
+- Show session readiness and warnings for high-latency clients.
 - Kick device controls.
 
 ## v0.3 - Calibration
