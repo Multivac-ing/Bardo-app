@@ -91,26 +91,47 @@ app.get("/api/config", async (_req, res) => {
 
 io.on("connection", (socket) => {
   const isHost = socket.handshake.auth?.token === hostToken || socket.handshake.query?.token === hostToken;
+  const clientId = socket.handshake.auth?.clientId || socket.handshake.query?.clientId || socket.id;
 
-  const client = {
-    id: socket.id,
-    connectedAt: new Date().toISOString(),
-    label: isHost ? "Host" : `Device ${clients.size + 1}`,
-    ready: false,
-    audioUnlocked: false,
-    userAgent: "",
-    clientType: isHost ? "host" : "phone",
-    clockOffsetMs: null,
-    latencyMs: null,
-    assetDecoded: false,
-    assetError: null
-  };
+  // Search if there is a client with the same clientId
+  let client = [...clients.values()].find((c) => c.clientId === clientId);
+  let isReconnect = false;
 
-  clients.set(socket.id, client);
-  console.log(`[client connected] ${client.label} (${socket.id}) as ${client.clientType}`);
+  if (client) {
+    isReconnect = true;
+    if (client.cleanupTimeout) {
+      clearTimeout(client.cleanupTimeout);
+      client.cleanupTimeout = null;
+    }
+    clients.delete(client.id);
+    client.id = socket.id;
+    client.connected = true;
+    client.ready = false; // Reset ready state so they run clock sync first on new socket
+    clients.set(socket.id, client);
+    console.log(`[client reconnected] ${client.label} (${socket.id}) as ${client.clientType}`);
+  } else {
+    client = {
+      id: socket.id,
+      clientId,
+      connectedAt: new Date().toISOString(),
+      label: isHost ? "Host" : `Device ${clients.size + 1}`,
+      ready: false,
+      audioUnlocked: false,
+      userAgent: "",
+      clientType: isHost ? "host" : "phone",
+      clockOffsetMs: null,
+      latencyMs: null,
+      assetDecoded: false,
+      assetError: null,
+      connected: true
+    };
+    clients.set(socket.id, client);
+    console.log(`[client connected] ${client.label} (${socket.id}) as ${client.clientType}`);
+  }
 
   socket.emit("server:hello", {
     id: socket.id,
+    clientId: client.clientId,
     serverTime: Date.now(),
     joinUrl: getJoinUrl(),
     clientType: client.clientType,
@@ -330,9 +351,24 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log(`[client disconnected] ${clients.get(socket.id)?.label || socket.id}`);
-    clients.delete(socket.id);
-    broadcastClients();
+    const current = clients.get(socket.id);
+    if (!current) return;
+
+    console.log(`[client disconnected] ${current.label} (${socket.id})`);
+
+    if (current.clientType === "host") {
+      clients.delete(socket.id);
+      broadcastClients();
+    } else {
+      current.connected = false;
+      broadcastClients();
+
+      current.cleanupTimeout = setTimeout(() => {
+        clients.delete(socket.id);
+        broadcastClients();
+        console.log(`[client cleaned up] ${current.label} (${socket.id}) after no reconnect.`);
+      }, 8000);
+    }
   });
 });
 

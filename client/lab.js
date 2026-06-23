@@ -11,7 +11,11 @@ const elements = {
   log: document.querySelector("#log")
 };
 
-const hostSocket = io();
+const urlParams = new URLSearchParams(window.location.search);
+const token = urlParams.get("token");
+const hostSocket = io({
+  auth: { token }
+});
 let phones = [];
 
 function log(message) {
@@ -56,7 +60,9 @@ function createPhone(index) {
   const phone = {
     index,
     label: `Lab phone ${index + 1}`,
-    socket: io(),
+    socket: io({
+      auth: { clientId: `lab-phone-${index}` }
+    }),
     connected: false,
     ready: false,
     latencyMs: null,
