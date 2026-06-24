@@ -12,6 +12,7 @@ const elements = {
   syncButton: document.querySelector("#syncButton"),
   calibrationInput: document.querySelector("#calibrationInput"),
   calibrationValue: document.querySelector("#calibrationValue"),
+  resetCalibrationButton: document.querySelector("#resetCalibrationButton"),
   playTestButton: document.querySelector("#playTestButton"),
   playAssetButton: document.querySelector("#playAssetButton"),
   audioUpload: document.querySelector("#audioUpload"),
@@ -342,6 +343,11 @@ elements.deviceNameInput.addEventListener("change", () => {
 
 elements.calibrationInput.addEventListener("input", (event) => {
   updateCalibration(event.target.value);
+});
+
+elements.resetCalibrationButton.addEventListener("click", () => {
+  updateCalibration(0);
+  log("Calibration reset to 0 ms.");
 });
 
 elements.playTestButton.addEventListener("click", () => {

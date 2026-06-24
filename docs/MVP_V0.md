@@ -39,3 +39,4 @@ Prove that phones connected to the same WiFi can play a short generated sound pa
 - Some routers isolate clients and block phone-to-computer access.
 - HTTP LAN pages cannot safely access microphone APIs in many browsers.
 - Mobile browsers can suspend background tabs; Bardo marks a hidden phone unavailable and re-syncs it after it returns.
+- For manual calibration, run a targeted pulse, adjust only the phone that sounds late, then reset to 0 ms if the result is worse.
