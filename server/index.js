@@ -17,6 +17,7 @@ if (!Number.isInteger(PORT) || PORT < 0 || PORT > 65535) {
 const MAX_CLOCK_SYNC_AGE_MS = 45_000;
 const RECONNECT_GRACE_MS = 10_000;
 const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
+const MAX_PHONE_CLIENTS = Number(process.env.BARDO_MAX_PHONES || 8);
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -177,12 +178,30 @@ io.on("connection", (socket) => {
     current.userAgent = String(payload.userAgent || "");
     current.label = String(payload.label || current.label).slice(0, 80);
     current.role = payload.hostToken === hostToken ? "host" : "phone";
+    if (current.role === "phone") {
+      const phoneCount = [...clients.values()].filter(
+        (client) => client.role === "phone" && client.connected,
+      ).length;
+      if (phoneCount > MAX_PHONE_CLIENTS) {
+        socket.emit("server:capacity-reached", {
+          maxPhones: MAX_PHONE_CLIENTS,
+        });
+        socket.disconnect(true);
+        return;
+      }
+    }
     if (current.role === "phone" && joinsLocked) {
       socket.emit("server:join-locked");
       socket.disconnect(true);
       return;
     }
     broadcastClients();
+    if (current.role === "host")
+      socket.emit("server:session-snapshot", {
+        clients: getClientList(),
+        joinsLocked,
+        playbackLeadMs,
+      });
   });
 
   socket.on("host:set-joins-locked", (locked, ack) => {

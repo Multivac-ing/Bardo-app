@@ -550,6 +550,22 @@ socket.on("server:join-locked", () => {
   socket.disconnect();
 });
 
+socket.on("server:capacity-reached", ({ maxPhones }) => {
+  elements.connectionStatus.textContent = `This session already has ${maxPhones} phones.`;
+  socket.disconnect();
+});
+
+socket.on(
+  "server:session-snapshot",
+  ({ clients, joinsLocked: locked, playbackLeadMs }) => {
+    latestDevices = clients;
+    joinsLocked = locked;
+    if (isHost)
+      renderDevices(clients.filter((device) => device.role === "phone"));
+    if (isHost) elements.leadTimeInput.value = String(playbackLeadMs / 1000);
+  },
+);
+
 socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
   if (!audioUnlocked) {
     elements.connectionStatus.textContent = "Tap Unlock audio before playing.";
