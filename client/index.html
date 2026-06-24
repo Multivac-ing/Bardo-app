@@ -31,8 +31,17 @@
 
         <article class="card">
           <h2>This device</h2>
-          <p id="connectionStatus" class="status">Connecting...</p>
-          <p id="syncStatus" class="small">Clock sync pending.</p>
+          <p
+            id="connectionStatus"
+            class="status"
+            role="status"
+            aria-live="polite"
+          >
+            Connecting...
+          </p>
+          <p id="syncStatus" class="small" aria-live="polite">
+            Clock sync pending.
+          </p>
           <label class="device-name" for="deviceNameInput">
             Phone name
             <input
@@ -101,7 +110,7 @@
 
         <article class="card wide host-only">
           <h2>Log</h2>
-          <pre id="log"></pre>
+          <pre id="log" aria-live="polite"></pre>
         </article>
       </section>
     </main>
