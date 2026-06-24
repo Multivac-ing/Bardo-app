@@ -294,6 +294,7 @@ function renderDevices(devices) {
           <span class="badge ${latencyClass}">${latencyText}</span>
           <span class="badge">${calibrationText}</span>
           <span class="badge ${qualityClass}">${qualityText}</span>
+          <button class="compact" data-pulse-id="${escapeHtml(device.id)}" type="button">Pulse</button>
           <button class="compact danger" data-kick-id="${escapeHtml(device.id)}" type="button">Remove</button>
         </div>
       `;
@@ -386,6 +387,11 @@ elements.stopButton.addEventListener("click", () => {
 
 elements.devices.addEventListener("click", (event) => {
   const button = event.target.closest("[data-kick-id]");
+  const pulseButton = event.target.closest("[data-pulse-id]");
+  if (pulseButton) {
+    socket.emit("host:play-pulse", { id: pulseButton.dataset.pulseId }, (result) => log(result?.ok ? `Pulse scheduled for ${result.label}.` : result?.message || "Could not run pulse."));
+    return;
+  }
   if (!button) return;
 
   socket.emit("host:kick-device", { id: button.dataset.kickId }, (result) => {
@@ -492,6 +498,13 @@ socket.on("server:play-asset", ({ assetId, serverStartAt }) => {
   source.connect(ensureAudioContext().destination);
   source.start(ensureAudioContext().currentTime + delay);
   activeNodes.push(source);
+});
+
+socket.on("server:play-pulse", ({ serverStartAt, pattern }) => {
+  if (!audioUnlocked || !Number.isFinite(clockOffsetMs)) return;
+  const delay = Math.max(0.08, (serverStartAt - clockOffsetMs - playbackCalibrationMs - performance.now()) / 1000);
+  playPatternAt(ensureAudioContext().currentTime + delay, pattern);
+  log("Calibration pulse scheduled.");
 });
 
 socket.on("server:stop", () => {

@@ -299,6 +299,21 @@ io.on("connection", (socket) => {
     respond({ ok: true, label: target.label });
   });
 
+  socket.on("host:play-pulse", (payload = {}, ack) => {
+    const respond = typeof ack === "function" ? ack : () => {};
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "host") return respond({ ok: false, message: "Only the host can run a calibration pulse." });
+    const target = clients.get(String(payload.id || ""));
+    if (!target || target.role !== "phone" || !target.ready || !Number.isFinite(target.clockOffsetMs)) {
+      return respond({ ok: false, message: "That phone is not ready for calibration." });
+    }
+    io.to(target.id).emit("server:play-pulse", {
+      serverStartAt: Date.now() + 1000,
+      pattern: [{ frequency: 880, durationMs: 160 }]
+    });
+    respond({ ok: true, label: target.label });
+  });
+
   socket.on("disconnect", () => {
     const current = clients.get(socket.id);
     if (!current) return;
