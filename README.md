@@ -66,6 +66,14 @@ Run the automated session checks:
 npm test
 ```
 
+Check that the local server is healthy before inviting phones:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+The response reports whether Bardo can see a LAN address and how many phone clients are currently connected. It never includes the host token or device names.
+
 Open the **Host dashboard URL printed in the terminal** on the computer. It includes a one-time local host key; keep it private from guests:
 
 ```text
