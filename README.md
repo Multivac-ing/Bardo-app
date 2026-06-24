@@ -74,6 +74,14 @@ curl http://localhost:3000/api/health
 
 The response reports whether Bardo can see a LAN address and how many phone clients are currently connected. It never includes the host token or device names.
 
+## Host configuration
+
+`PORT` selects the listening port (default `3000`). `BARDO_HOST` forces the LAN address used in the QR and phone join URL—for example when a VPN or Docker adapter would otherwise be selected first.
+
+```bash
+PORT=3102 BARDO_HOST=192.168.1.10 npm start
+```
+
 Open the **Host dashboard URL printed in the terminal** on the computer. It includes a one-time local host key; keep it private from guests:
 
 ```text
@@ -108,6 +116,10 @@ Keep every phone tab in the foreground during the test. If a phone returns from 
 ## Working name
 
 **Bardo**
+
+## Privacy
+
+See [local-first privacy and data retention](docs/PRIVACY.md) for what the current MVP keeps in memory, browser storage, and the local network.
 
 Tagline candidates:
 

@@ -11,6 +11,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const PORT = Number(process.env.PORT || 3000);
+if (!Number.isInteger(PORT) || PORT < 0 || PORT > 65535) {
+  throw new Error("PORT must be an integer between 0 and 65535.");
+}
 const MAX_CLOCK_SYNC_AGE_MS = 45_000;
 const RECONNECT_GRACE_MS = 10_000;
 const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
@@ -33,7 +36,8 @@ function getLanAddresses() {
 }
 
 function getPublicHost() {
-  return process.env.BARDO_HOST || getLanAddresses()[0] || "localhost";
+  const forcedHost = process.env.BARDO_HOST?.trim();
+  return forcedHost || getLanAddresses()[0] || "localhost";
 }
 
 function getJoinUrl() {
