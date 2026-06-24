@@ -20,6 +20,7 @@ const elements = {
   stopButton: document.querySelector("#stopButton"),
   sessionStatus: document.querySelector("#sessionStatus"),
   joinLockButton: document.querySelector("#joinLockButton"),
+  leadTimeInput: document.querySelector("#leadTimeInput"),
   devices: document.querySelector("#devices"),
   log: document.querySelector("#log"),
 };
@@ -398,6 +399,17 @@ elements.joinLockButton.addEventListener("click", () => {
   });
 });
 
+elements.leadTimeInput.addEventListener("change", () => {
+  socket.emit(
+    "host:set-playback-lead",
+    Number(elements.leadTimeInput.value) * 1000,
+    (result) => {
+      if (result?.ok)
+        elements.leadTimeInput.value = String(result.playbackLeadMs / 1000);
+    },
+  );
+});
+
 elements.audioUpload.addEventListener("change", () => {
   const file = elements.audioUpload.files[0];
   if (!file) return;
@@ -522,6 +534,8 @@ socket.on("server:hello", (payload) => {
 socket.on("server:clients", (devices) => {
   latestDevices = devices;
   joinsLocked = Boolean(devices[0]?.joinsLocked);
+  if (isHost && devices[0]?.playbackLeadMs)
+    elements.leadTimeInput.value = String(devices[0].playbackLeadMs / 1000);
   if (isHost)
     elements.joinLockButton.textContent = joinsLocked
       ? "Allow new joins"

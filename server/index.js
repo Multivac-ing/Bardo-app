@@ -26,6 +26,7 @@ const clients = new Map();
 const hostToken = crypto.randomUUID();
 let currentAsset = null;
 let joinsLocked = false;
+let playbackLeadMs = 3000;
 
 function getLanAddresses() {
   const addresses = [];
@@ -70,6 +71,7 @@ function getClientList() {
     jitterMs: client.jitterMs,
     syncQuality: client.syncQuality,
     joinsLocked,
+    playbackLeadMs,
   }));
 }
 
@@ -191,6 +193,22 @@ io.on("connection", (socket) => {
     joinsLocked = Boolean(locked);
     broadcastClients();
     respond({ ok: true, joinsLocked });
+  });
+
+  socket.on("host:set-playback-lead", (value, ack) => {
+    const respond = typeof ack === "function" ? ack : () => {};
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "host")
+      return respond({
+        ok: false,
+        message: "Only the host can set lead time.",
+      });
+    playbackLeadMs = Math.max(
+      1000,
+      Math.min(10000, Math.round(Number(value) || 3000)),
+    );
+    broadcastClients();
+    respond({ ok: true, playbackLeadMs });
   });
 
   socket.on("client:ready", (payload = {}) => {
@@ -323,7 +341,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const serverStartAt = Date.now() + 3000;
+    const serverStartAt = Date.now() + playbackLeadMs;
     const pattern = [
       { frequency: 392, durationMs: 180 },
       { frequency: 0, durationMs: 80 },
@@ -373,7 +391,7 @@ io.on("connection", (socket) => {
         ok: false,
         message: "Every connected phone must be ready and decode the audio.",
       });
-    const serverStartAt = Date.now() + 3000;
+    const serverStartAt = Date.now() + playbackLeadMs;
     for (const phone of phones)
       io.to(phone.id).emit("server:play-asset", {
         assetId: currentAsset.id,
@@ -423,7 +441,7 @@ io.on("connection", (socket) => {
       });
     }
     io.to(target.id).emit("server:play-pulse", {
-      serverStartAt: Date.now() + 1000,
+      serverStartAt: Date.now() + Math.min(playbackLeadMs, 1000),
       pattern: [{ frequency: 880, durationMs: 160 }],
     });
     respond({ ok: true, label: target.label });
