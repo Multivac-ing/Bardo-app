@@ -83,7 +83,8 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
     }, 20);
   }).then(async (hostToken) => {
     const host = io(baseUrl, { transports: ["websocket"] });
-    const phone = io(baseUrl, { transports: ["websocket"] });
+    const clientId = "reconnectable-phone";
+    let phone = io(baseUrl, { transports: ["websocket"], auth: { clientId } });
 
     t.after(() => {
       host.close();
@@ -138,6 +139,24 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
     const stopped = waitFor(phone, "server:stop");
     assert.deepEqual(await emitWithAck(host, "host:stop"), { ok: true });
     await stopped;
+
+    phone.disconnect();
+    phone = io(baseUrl, { transports: ["websocket"], auth: { clientId } });
+    await waitForConnect(phone);
+
+    const rejoined = waitForDevices(host, (devices) => {
+      const matches = devices.filter((device) => device.clientId === clientId);
+      return matches.length === 1 && matches[0].connected && !matches[0].ready;
+    });
+    phone.emit("client:profile", { label: "Phone" });
+    await rejoined;
+
+    const readyAgain = waitForDevices(host, (devices) =>
+      devices.some((device) => device.clientId === clientId && device.ready)
+    );
+    phone.emit("client:sync-report", { clockOffsetMs: 4, latencyMs: 2, playbackCalibrationMs: 25 });
+    phone.emit("client:ready", { ready: true, audioUnlocked: true });
+    await readyAgain;
 
     const kicked = waitFor(phone, "server:kicked");
     assert.deepEqual(

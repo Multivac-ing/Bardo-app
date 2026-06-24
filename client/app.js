@@ -1,4 +1,6 @@
-const socket = io();
+const clientId = localStorage.getItem("bardo-client-id") || crypto.randomUUID();
+localStorage.setItem("bardo-client-id", clientId);
+const socket = io({ auth: { clientId } });
 
 const elements = {
   qrImage: document.querySelector("#qrImage"),
@@ -168,7 +170,7 @@ function median(values) {
 }
 
 async function runClockSync(sampleCount = 9) {
-  if (clockSyncInFlight) return;
+  if (clockSyncInFlight) return false;
   clockSyncInFlight = true;
 
   const samples = [];
@@ -218,7 +220,7 @@ async function runClockSync(sampleCount = 9) {
     elements.syncStatus.textContent = "Clock sync failed.";
     log("Clock sync failed.");
     clockSyncInFlight = false;
-    return;
+    return false;
   }
 
   const bestSamples = samples
@@ -239,6 +241,7 @@ async function runClockSync(sampleCount = 9) {
 
   log(`Clock sync complete. Offset ${Math.round(clockOffsetMs)} ms, latency ${Math.round(latencyMs)} ms.`);
   clockSyncInFlight = false;
+  return true;
 }
 
 function renderDevices(devices) {
@@ -356,18 +359,27 @@ elements.devices.addEventListener("click", (event) => {
   });
 });
 
-socket.on("connect", () => {
+socket.on("connect", async () => {
   elements.connectionStatus.textContent = "Connected.";
   log(`Connected as ${socket.id}.`);
 
   sendProfile();
 
-  if (!isHost) runClockSync(5);
+  if (isHost) return;
+
+  const synced = await runClockSync(5);
+  if (audioUnlocked && synced) {
+    socket.emit("client:ready", { ready: true, audioUnlocked: true });
+    elements.connectionStatus.textContent = "Reconnected. Ready.";
+  } else if (!audioUnlocked) {
+    socket.emit("client:ready", { ready: false, audioUnlocked: false });
+    elements.connectionStatus.textContent = "Reconnected. Tap Unlock audio.";
+  }
 });
 
 socket.on("disconnect", () => {
-  elements.connectionStatus.textContent = "Disconnected.";
-  log("Disconnected from Bardo server.");
+  elements.connectionStatus.textContent = "Disconnected. Reconnecting...";
+  log("Disconnected; waiting to reconnect.");
 });
 
 document.addEventListener("visibilitychange", async () => {

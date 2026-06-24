@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const PORT = Number(process.env.PORT || 3000);
 const MAX_CLOCK_SYNC_AGE_MS = 45_000;
+const RECONNECT_GRACE_MS = 10_000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -43,6 +44,8 @@ function getHostUrl() {
 function getClientList() {
   return [...clients.values()].map((client) => ({
     id: client.id,
+    clientId: client.clientId,
+    connected: client.connected,
     connectedAt: client.connectedAt,
     label: client.label,
     role: client.role,
@@ -76,8 +79,25 @@ app.get("/api/config", async (req, res) => {
 });
 
 io.on("connection", (socket) => {
-  const client = {
+  const clientId = String(socket.handshake.auth?.clientId || socket.id).slice(0, 100);
+  let client = [...clients.values()].find((entry) => entry.clientId === clientId);
+
+  if (client) {
+    clearTimeout(client.cleanupTimeout);
+    clients.delete(client.id);
+    client.id = socket.id;
+    client.connected = true;
+    client.ready = false;
+    client.audioUnlocked = false;
+    client.clockOffsetMs = null;
+    client.latencyMs = null;
+    client.lastSyncedAt = null;
+    clients.set(socket.id, client);
+  } else {
+    client = {
     id: socket.id,
+    clientId,
+    connected: true,
     connectedAt: new Date().toISOString(),
     label: `Device ${clients.size + 1}`,
     role: "phone",
@@ -87,11 +107,19 @@ io.on("connection", (socket) => {
     clockOffsetMs: null,
     latencyMs: null,
     playbackCalibrationMs: 0,
-    lastSyncedAt: null
-  };
+    lastSyncedAt: null,
+    cleanupTimeout: null
+    };
 
-  clients.set(socket.id, client);
-  socket.emit("server:hello", { id: socket.id, serverTime: Date.now(), joinUrl: getJoinUrl() });
+    clients.set(socket.id, client);
+  }
+
+  socket.emit("server:hello", {
+    id: socket.id,
+    clientId,
+    serverTime: Date.now(),
+    joinUrl: getJoinUrl()
+  });
   broadcastClients();
 
   socket.on("client:profile", (payload = {}) => {
@@ -205,8 +233,25 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    clients.delete(socket.id);
+    const current = clients.get(socket.id);
+    if (!current) return;
+
+    if (current.role === "host") {
+      clients.delete(socket.id);
+      broadcastClients();
+      return;
+    }
+
+    current.connected = false;
+    current.ready = false;
     broadcastClients();
+
+    current.cleanupTimeout = setTimeout(() => {
+      if (clients.get(current.id) === current && !current.connected) {
+        clients.delete(current.id);
+        broadcastClients();
+      }
+    }, RECONNECT_GRACE_MS);
   });
 });
 
