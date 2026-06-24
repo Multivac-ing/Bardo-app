@@ -19,7 +19,9 @@ const RECONNECT_GRACE_MS = 10_000;
 const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { maxHttpBufferSize: MAX_AUDIO_BYTES + 1024 * 1024 });
+const io = new Server(server, {
+  maxHttpBufferSize: MAX_AUDIO_BYTES + 1024 * 1024,
+});
 const clients = new Map();
 const hostToken = crypto.randomUUID();
 let currentAsset = null;
@@ -29,7 +31,8 @@ function getLanAddresses() {
   const addresses = [];
   for (const entries of Object.values(os.networkInterfaces())) {
     for (const entry of entries || []) {
-      if (entry.family === "IPv4" && !entry.internal) addresses.push(entry.address);
+      if (entry.family === "IPv4" && !entry.internal)
+        addresses.push(entry.address);
     }
   }
   return addresses;
@@ -65,8 +68,8 @@ function getClientList() {
     lastSyncedAt: client.lastSyncedAt,
     assetReady: client.assetReady,
     jitterMs: client.jitterMs,
-    syncQuality: client.syncQuality
-    ,joinsLocked
+    syncQuality: client.syncQuality,
+    joinsLocked,
   }));
 }
 
@@ -75,7 +78,10 @@ function broadcastClients() {
 }
 
 app.use((_req, res, next) => {
-  res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:");
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:",
+  );
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("X-Content-Type-Options", "nosniff");
   next();
@@ -88,7 +94,9 @@ app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
     lanAvailable: lanAddresses.length > 0,
-    phoneCount: [...clients.values()].filter((client) => client.role === "phone" && client.connected).length
+    phoneCount: [...clients.values()].filter(
+      (client) => client.role === "phone" && client.connected,
+    ).length,
   });
 });
 
@@ -101,13 +109,18 @@ app.get("/api/config", async (req, res) => {
     qrDataUrl: await QRCode.toDataURL(joinUrl),
     isHost: req.query.hostToken === hostToken,
     lanAddresses: getLanAddresses(),
-    serverTime: Date.now()
+    serverTime: Date.now(),
   });
 });
 
 io.on("connection", (socket) => {
-  const clientId = String(socket.handshake.auth?.clientId || socket.id).slice(0, 100);
-  let client = [...clients.values()].find((entry) => entry.clientId === clientId);
+  const clientId = String(socket.handshake.auth?.clientId || socket.id).slice(
+    0,
+    100,
+  );
+  let client = [...clients.values()].find(
+    (entry) => entry.clientId === clientId,
+  );
 
   if (client) {
     clearTimeout(client.cleanupTimeout);
@@ -122,23 +135,23 @@ io.on("connection", (socket) => {
     clients.set(socket.id, client);
   } else {
     client = {
-    id: socket.id,
-    clientId,
-    connected: true,
-    connectedAt: new Date().toISOString(),
-    label: `Device ${clients.size + 1}`,
-    role: "phone",
-    ready: false,
-    audioUnlocked: false,
-    userAgent: "",
-    clockOffsetMs: null,
-    latencyMs: null,
-    playbackCalibrationMs: 0,
-    lastSyncedAt: null,
-    assetReady: false,
-    jitterMs: null,
-    syncQuality: "unknown",
-    cleanupTimeout: null
+      id: socket.id,
+      clientId,
+      connected: true,
+      connectedAt: new Date().toISOString(),
+      label: `Device ${clients.size + 1}`,
+      role: "phone",
+      ready: false,
+      audioUnlocked: false,
+      userAgent: "",
+      clockOffsetMs: null,
+      latencyMs: null,
+      playbackCalibrationMs: 0,
+      lastSyncedAt: null,
+      assetReady: false,
+      jitterMs: null,
+      syncQuality: "unknown",
+      cleanupTimeout: null,
     };
 
     clients.set(socket.id, client);
@@ -148,7 +161,7 @@ io.on("connection", (socket) => {
     id: socket.id,
     clientId,
     serverTime: Date.now(),
-    joinUrl: getJoinUrl()
+    joinUrl: getJoinUrl(),
   });
   if (currentAsset && client.role === "phone") {
     socket.emit("server:asset-loaded", currentAsset);
@@ -173,7 +186,8 @@ io.on("connection", (socket) => {
   socket.on("host:set-joins-locked", (locked, ack) => {
     const respond = typeof ack === "function" ? ack : () => {};
     const current = clients.get(socket.id);
-    if (!current || current.role !== "host") return respond({ ok: false, message: "Only the host can lock joins." });
+    if (!current || current.role !== "host")
+      return respond({ ok: false, message: "Only the host can lock joins." });
     joinsLocked = Boolean(locked);
     broadcastClients();
     respond({ ok: true, joinsLocked });
@@ -191,29 +205,37 @@ io.on("connection", (socket) => {
     socket.emit("server:sync-pong", {
       seq: payload.seq,
       clientSentAt: payload.clientSentAt,
-      serverReceivedAt: Date.now()
+      serverReceivedAt: Date.now(),
     });
   });
 
   socket.on("client:sync-report", (payload = {}) => {
     const current = clients.get(socket.id);
     if (!current || current.role !== "phone") return;
-    current.clockOffsetMs = Number.isFinite(payload.clockOffsetMs) ? Math.round(payload.clockOffsetMs) : null;
-    current.latencyMs = Number.isFinite(payload.latencyMs) ? Math.round(payload.latencyMs) : null;
+    current.clockOffsetMs = Number.isFinite(payload.clockOffsetMs)
+      ? Math.round(payload.clockOffsetMs)
+      : null;
+    current.latencyMs = Number.isFinite(payload.latencyMs)
+      ? Math.round(payload.latencyMs)
+      : null;
     const rttSamples = Array.isArray(payload.rttSamples)
       ? payload.rttSamples.filter(Number.isFinite).map(Number).slice(0, 12)
       : [];
-    current.jitterMs = rttSamples.length > 1
-      ? Math.round(Math.max(...rttSamples) - Math.min(...rttSamples))
-      : null;
-    current.syncQuality = current.latencyMs === null || current.jitterMs === null
-      ? "unknown"
-      : current.latencyMs <= 40 && current.jitterMs <= 10
-        ? "good"
-        : current.latencyMs <= 100 && current.jitterMs <= 35
-          ? "caution"
-          : "poor";
-    current.playbackCalibrationMs = Number.isFinite(payload.playbackCalibrationMs)
+    current.jitterMs =
+      rttSamples.length > 1
+        ? Math.round(Math.max(...rttSamples) - Math.min(...rttSamples))
+        : null;
+    current.syncQuality =
+      current.latencyMs === null || current.jitterMs === null
+        ? "unknown"
+        : current.latencyMs <= 40 && current.jitterMs <= 10
+          ? "good"
+          : current.latencyMs <= 100 && current.jitterMs <= 35
+            ? "caution"
+            : "poor";
+    current.playbackCalibrationMs = Number.isFinite(
+      payload.playbackCalibrationMs,
+    )
       ? Math.max(-200, Math.min(200, Math.round(payload.playbackCalibrationMs)))
       : 0;
     current.lastSyncedAt = new Date().toISOString();
@@ -228,25 +250,44 @@ io.on("connection", (socket) => {
       return;
     }
     const { name, type, data } = payload;
-    if (!Buffer.isBuffer(data) || !String(type).startsWith("audio/") || data.length > MAX_AUDIO_BYTES) {
+    if (
+      !Buffer.isBuffer(data) ||
+      !String(type).startsWith("audio/") ||
+      data.length > MAX_AUDIO_BYTES
+    ) {
       respond({ ok: false, message: "Use a supported audio file up to 8 MB." });
       return;
     }
-    currentAsset = { id: crypto.randomUUID(), name: String(name || "audio").slice(0, 120), type, size: data.length, data };
+    currentAsset = {
+      id: crypto.randomUUID(),
+      name: String(name || "audio").slice(0, 120),
+      type,
+      size: data.length,
+      data,
+    };
     for (const phone of clients.values()) {
       if (phone.role === "phone") phone.assetReady = false;
     }
     for (const phone of clients.values()) {
-      if (phone.role === "phone" && phone.connected) io.to(phone.id).emit("server:asset-loaded", currentAsset);
+      if (phone.role === "phone" && phone.connected)
+        io.to(phone.id).emit("server:asset-loaded", currentAsset);
     }
     broadcastClients();
-    respond({ ok: true, asset: { id: currentAsset.id, name: currentAsset.name, size: currentAsset.size } });
+    respond({
+      ok: true,
+      asset: {
+        id: currentAsset.id,
+        name: currentAsset.name,
+        size: currentAsset.size,
+      },
+    });
   });
 
   socket.on("client:asset-ready", (payload = {}) => {
     const current = clients.get(socket.id);
     if (!current || current.role !== "phone" || !currentAsset) return;
-    current.assetReady = payload.assetId === currentAsset.id && Boolean(payload.ready);
+    current.assetReady =
+      payload.assetId === currentAsset.id && Boolean(payload.ready);
     broadcastClients();
   });
 
@@ -258,13 +299,16 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const phones = [...clients.values()].filter((client) => client.role === "phone");
+    const phones = [...clients.values()].filter(
+      (client) => client.role === "phone",
+    );
     const unavailable = phones.filter(
       (phone) =>
         !phone.ready ||
         !Number.isFinite(phone.clockOffsetMs) ||
         !phone.lastSyncedAt ||
-        Date.now() - new Date(phone.lastSyncedAt).getTime() > MAX_CLOCK_SYNC_AGE_MS
+        Date.now() - new Date(phone.lastSyncedAt).getTime() >
+          MAX_CLOCK_SYNC_AGE_MS,
     );
 
     if (!phones.length) {
@@ -272,16 +316,22 @@ io.on("connection", (socket) => {
       return;
     }
     if (unavailable.length) {
-      respond({ ok: false, message: `${unavailable.length} phone(s) need audio unlock and a recent clock sync.` });
+      respond({
+        ok: false,
+        message: `${unavailable.length} phone(s) need audio unlock and a recent clock sync.`,
+      });
       return;
     }
 
     const serverStartAt = Date.now() + 3000;
     const pattern = [
-      { frequency: 392, durationMs: 180 }, { frequency: 0, durationMs: 80 },
-      { frequency: 523.25, durationMs: 180 }, { frequency: 0, durationMs: 80 },
-      { frequency: 659.25, durationMs: 280 }, { frequency: 0, durationMs: 100 },
-      { frequency: 783.99, durationMs: 360 }
+      { frequency: 392, durationMs: 180 },
+      { frequency: 0, durationMs: 80 },
+      { frequency: 523.25, durationMs: 180 },
+      { frequency: 0, durationMs: 80 },
+      { frequency: 659.25, durationMs: 280 },
+      { frequency: 0, durationMs: 100 },
+      { frequency: 783.99, durationMs: 360 },
     ];
     for (const phone of phones) {
       io.to(phone.id).emit("server:play-test", { serverStartAt, pattern });
@@ -305,13 +355,30 @@ io.on("connection", (socket) => {
   socket.on("host:play-asset", (ack) => {
     const respond = typeof ack === "function" ? ack : () => {};
     const current = clients.get(socket.id);
-    if (!current || current.role !== "host") return respond({ ok: false, message: "Only the host can play audio." });
-    if (!currentAsset) return respond({ ok: false, message: "Upload an audio file first." });
-    const phones = [...clients.values()].filter((client) => client.role === "phone");
-    const unavailable = phones.filter((phone) => !phone.ready || !phone.assetReady || !Number.isFinite(phone.clockOffsetMs));
-    if (!phones.length || unavailable.length) return respond({ ok: false, message: "Every connected phone must be ready and decode the audio." });
+    if (!current || current.role !== "host")
+      return respond({ ok: false, message: "Only the host can play audio." });
+    if (!currentAsset)
+      return respond({ ok: false, message: "Upload an audio file first." });
+    const phones = [...clients.values()].filter(
+      (client) => client.role === "phone",
+    );
+    const unavailable = phones.filter(
+      (phone) =>
+        !phone.ready ||
+        !phone.assetReady ||
+        !Number.isFinite(phone.clockOffsetMs),
+    );
+    if (!phones.length || unavailable.length)
+      return respond({
+        ok: false,
+        message: "Every connected phone must be ready and decode the audio.",
+      });
     const serverStartAt = Date.now() + 3000;
-    for (const phone of phones) io.to(phone.id).emit("server:play-asset", { assetId: currentAsset.id, serverStartAt });
+    for (const phone of phones)
+      io.to(phone.id).emit("server:play-asset", {
+        assetId: currentAsset.id,
+        serverStartAt,
+      });
     respond({ ok: true, phoneCount: phones.length });
   });
 
@@ -338,14 +405,26 @@ io.on("connection", (socket) => {
   socket.on("host:play-pulse", (payload = {}, ack) => {
     const respond = typeof ack === "function" ? ack : () => {};
     const current = clients.get(socket.id);
-    if (!current || current.role !== "host") return respond({ ok: false, message: "Only the host can run a calibration pulse." });
+    if (!current || current.role !== "host")
+      return respond({
+        ok: false,
+        message: "Only the host can run a calibration pulse.",
+      });
     const target = clients.get(String(payload.id || ""));
-    if (!target || target.role !== "phone" || !target.ready || !Number.isFinite(target.clockOffsetMs)) {
-      return respond({ ok: false, message: "That phone is not ready for calibration." });
+    if (
+      !target ||
+      target.role !== "phone" ||
+      !target.ready ||
+      !Number.isFinite(target.clockOffsetMs)
+    ) {
+      return respond({
+        ok: false,
+        message: "That phone is not ready for calibration.",
+      });
     }
     io.to(target.id).emit("server:play-pulse", {
       serverStartAt: Date.now() + 1000,
-      pattern: [{ frequency: 880, durationMs: 160 }]
+      pattern: [{ frequency: 880, durationMs: 160 }],
     });
     respond({ ok: true, label: target.label });
   });
