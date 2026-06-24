@@ -28,6 +28,29 @@ const hostToken = crypto.randomUUID();
 let currentAsset = null;
 let joinsLocked = false;
 let playbackLeadMs = 3000;
+let selectedHost = null;
+const TEST_PATTERNS = {
+  melody: [
+    { frequency: 392, durationMs: 180 },
+    { frequency: 0, durationMs: 80 },
+    { frequency: 523.25, durationMs: 180 },
+    { frequency: 0, durationMs: 80 },
+    { frequency: 659.25, durationMs: 280 },
+    { frequency: 0, durationMs: 100 },
+    { frequency: 783.99, durationMs: 360 },
+  ],
+  clicks: [
+    { frequency: 1000, durationMs: 70 },
+    { frequency: 0, durationMs: 180 },
+    { frequency: 1000, durationMs: 70 },
+  ],
+  alternating: [
+    { frequency: 440, durationMs: 180 },
+    { frequency: 660, durationMs: 180 },
+    { frequency: 440, durationMs: 180 },
+  ],
+};
+let selectedPattern = "melody";
 
 function getLanAddresses() {
   const addresses = [];
@@ -42,7 +65,7 @@ function getLanAddresses() {
 
 function getPublicHost() {
   const forcedHost = process.env.BARDO_HOST?.trim();
-  return forcedHost || getLanAddresses()[0] || "localhost";
+  return forcedHost || selectedHost || getLanAddresses()[0] || "localhost";
 }
 
 function getJoinUrl() {
@@ -73,6 +96,7 @@ function getClientList() {
     syncQuality: client.syncQuality,
     joinsLocked,
     playbackLeadMs,
+    selectedPattern,
   }));
 }
 
@@ -230,6 +254,37 @@ io.on("connection", (socket) => {
     respond({ ok: true, playbackLeadMs });
   });
 
+  socket.on("host:set-pattern", (name, ack) => {
+    const respond = typeof ack === "function" ? ack : () => {};
+    const current = clients.get(socket.id);
+    if (
+      !current ||
+      current.role !== "host" ||
+      !Object.hasOwn(TEST_PATTERNS, name)
+    )
+      return respond({ ok: false });
+    selectedPattern = name;
+    broadcastClients();
+    respond({ ok: true, selectedPattern });
+  });
+
+  socket.on("host:set-join-address", (address, ack) => {
+    const respond = typeof ack === "function" ? ack : () => {};
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "host")
+      return respond({
+        ok: false,
+        message: "Only the host can select the join address.",
+      });
+    if (!getLanAddresses().includes(address))
+      return respond({
+        ok: false,
+        message: "That address is not available on this host.",
+      });
+    selectedHost = address;
+    respond({ ok: true, joinUrl: getJoinUrl() });
+  });
+
   socket.on("client:ready", (payload = {}) => {
     const current = clients.get(socket.id);
     if (!current || current.role !== "phone") return;
@@ -361,7 +416,7 @@ io.on("connection", (socket) => {
     }
 
     const serverStartAt = Date.now() + playbackLeadMs;
-    const pattern = [
+    const pattern = TEST_PATTERNS[selectedPattern] || [
       { frequency: 392, durationMs: 180 },
       { frequency: 0, durationMs: 80 },
       { frequency: 523.25, durationMs: 180 },

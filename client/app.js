@@ -20,6 +20,7 @@ const elements = {
   stopButton: document.querySelector("#stopButton"),
   sessionStatus: document.querySelector("#sessionStatus"),
   joinLockButton: document.querySelector("#joinLockButton"),
+  patternSelect: document.querySelector("#patternSelect"),
   leadTimeInput: document.querySelector("#leadTimeInput"),
   devices: document.querySelector("#devices"),
   log: document.querySelector("#log"),
@@ -398,6 +399,9 @@ elements.joinLockButton.addEventListener("click", () => {
       : "Lock new joins";
   });
 });
+elements.patternSelect.addEventListener("change", () =>
+  socket.emit("host:set-pattern", elements.patternSelect.value),
+);
 
 elements.leadTimeInput.addEventListener("change", () => {
   socket.emit(
