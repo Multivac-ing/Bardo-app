@@ -158,6 +158,23 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
     phone.emit("client:ready", { ready: true, audioUnlocked: true });
     await readyAgain;
 
+    const assetLoaded = waitFor(phone, "server:asset-loaded");
+    const uploaded = await emitWithAck(host, "host:upload-audio", {
+      name: "test.wav",
+      type: "audio/wav",
+      data: Buffer.from("tiny test payload")
+    });
+    assert.equal(uploaded.ok, true);
+    const asset = await assetLoaded;
+    const assetReady = waitForDevices(host, (devices) =>
+      devices.some((device) => device.clientId === clientId && device.assetReady)
+    );
+    phone.emit("client:asset-ready", { assetId: asset.id, ready: true });
+    await assetReady;
+    const assetPlayback = waitFor(phone, "server:play-asset");
+    assert.deepEqual(await emitWithAck(host, "host:play-asset"), { ok: true, phoneCount: 1 });
+    assert.equal((await assetPlayback).assetId, asset.id);
+
     const kicked = waitFor(phone, "server:kicked");
     assert.deepEqual(
       await emitWithAck(host, "host:kick-device", { id: phone.id }),
