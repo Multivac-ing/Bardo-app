@@ -58,7 +58,9 @@ function getClientList() {
     latencyMs: client.latencyMs,
     playbackCalibrationMs: client.playbackCalibrationMs,
     lastSyncedAt: client.lastSyncedAt,
-    assetReady: client.assetReady
+    assetReady: client.assetReady,
+    jitterMs: client.jitterMs,
+    syncQuality: client.syncQuality
   }));
 }
 
@@ -112,6 +114,8 @@ io.on("connection", (socket) => {
     playbackCalibrationMs: 0,
     lastSyncedAt: null,
     assetReady: false,
+    jitterMs: null,
+    syncQuality: "unknown",
     cleanupTimeout: null
     };
 
@@ -160,6 +164,19 @@ io.on("connection", (socket) => {
     if (!current || current.role !== "phone") return;
     current.clockOffsetMs = Number.isFinite(payload.clockOffsetMs) ? Math.round(payload.clockOffsetMs) : null;
     current.latencyMs = Number.isFinite(payload.latencyMs) ? Math.round(payload.latencyMs) : null;
+    const rttSamples = Array.isArray(payload.rttSamples)
+      ? payload.rttSamples.filter(Number.isFinite).map(Number).slice(0, 12)
+      : [];
+    current.jitterMs = rttSamples.length > 1
+      ? Math.round(Math.max(...rttSamples) - Math.min(...rttSamples))
+      : null;
+    current.syncQuality = current.latencyMs === null || current.jitterMs === null
+      ? "unknown"
+      : current.latencyMs <= 40 && current.jitterMs <= 10
+        ? "good"
+        : current.latencyMs <= 100 && current.jitterMs <= 35
+          ? "caution"
+          : "poor";
     current.playbackCalibrationMs = Number.isFinite(payload.playbackCalibrationMs)
       ? Math.max(-200, Math.min(200, Math.round(payload.playbackCalibrationMs)))
       : 0;

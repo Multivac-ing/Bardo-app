@@ -241,7 +241,8 @@ async function runClockSync(sampleCount = 9) {
   socket.emit("client:sync-report", {
     clockOffsetMs,
     latencyMs,
-    playbackCalibrationMs
+    playbackCalibrationMs,
+    rttSamples: samples.map((sample) => Math.round(sample.rttMs))
   });
 
   log(`Clock sync complete. Offset ${Math.round(clockOffsetMs)} ms, latency ${Math.round(latencyMs)} ms.`);
@@ -280,6 +281,10 @@ function renderDevices(devices) {
       const calibrationText = device.playbackCalibrationMs
         ? `${device.playbackCalibrationMs}ms advance`
         : "no calibration";
+      const qualityClass = device.syncQuality === "good" ? "ok" : device.syncQuality === "unknown" ? "" : "warn";
+      const qualityText = device.syncQuality === "unknown"
+        ? "sync unknown"
+        : `${device.syncQuality} · ${device.jitterMs}ms jitter`;
 
       return `
         <div class="device">
@@ -288,6 +293,7 @@ function renderDevices(devices) {
           <span class="badge">${offsetText}</span>
           <span class="badge ${latencyClass}">${latencyText}</span>
           <span class="badge">${calibrationText}</span>
+          <span class="badge ${qualityClass}">${qualityText}</span>
           <button class="compact danger" data-kick-id="${escapeHtml(device.id)}" type="button">Remove</button>
         </div>
       `;
