@@ -114,14 +114,16 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
           device.label === "Phone" &&
           device.ready &&
           Number.isFinite(device.clockOffsetMs) &&
-          device.playbackCalibrationMs === 25
+          device.playbackCalibrationMs === 25 &&
+          device.syncQuality === "good"
       )
     );
     phone.emit("client:ready", { ready: true, audioUnlocked: true });
     phone.emit("client:sync-report", {
       clockOffsetMs: 4,
       latencyMs: 2,
-      playbackCalibrationMs: 25
+      playbackCalibrationMs: 25,
+      rttSamples: [4, 7, 6]
     });
     await phoneReady;
 
