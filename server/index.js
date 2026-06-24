@@ -552,3 +552,12 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log("");
   console.log("Connect phones to the same WiFi and open the phone join URL.");
 });
+
+function shutdown() {
+  io.emit("server:shutting-down");
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 1000).unref();
+}
+
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);

@@ -651,6 +651,12 @@ socket.on("server:kicked", () => {
   log("Removed by the host.");
 });
 
+socket.on("server:shutting-down", () => {
+  elements.connectionStatus.textContent =
+    "Host server is restarting. Reopen the new join URL when ready.";
+  log("Server is shutting down.");
+});
+
 loadConfig().catch((error) => {
   log(`Config error: ${error.message}`);
 });
