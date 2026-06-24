@@ -133,6 +133,10 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
     assert.ok(scheduled.serverStartAt > Date.now());
     assert.equal(scheduled.pattern.length, 7);
 
+    const pulse = waitFor(phone, "server:play-pulse");
+    assert.deepEqual(await emitWithAck(host, "host:play-pulse", { id: phone.id }), { ok: true, label: "Phone" });
+    assert.equal((await pulse).pattern[0].frequency, 880);
+
     assert.deepEqual(await emitWithAck(phone, "host:stop"), {
       ok: false,
       message: "Only the host can stop playback."
