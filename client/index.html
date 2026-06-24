@@ -12,7 +12,9 @@
       <section class="hero">
         <p class="eyebrow">Local-first synchronized phone speaker experiment</p>
         <h1>Bardo</h1>
-        <p class="subtitle">Turn phones on the same WiFi into one synchronized speaker group.</p>
+        <p class="subtitle">
+          Turn phones on the same WiFi into one synchronized speaker group.
+        </p>
       </section>
 
       <section class="grid">
@@ -21,32 +23,83 @@
           <div class="qr-wrap">
             <img id="qrImage" alt="QR code to join Bardo" />
           </div>
-          <p class="small">Open this URL from every phone connected to the same WiFi:</p>
+          <p class="small">
+            Open this URL from every phone connected to the same WiFi:
+          </p>
           <code id="joinUrl">Loading...</code>
         </article>
 
         <article class="card">
           <h2>This device</h2>
-          <p id="connectionStatus" class="status">Connecting...</p>
-          <p id="syncStatus" class="small">Clock sync pending.</p>
+          <p
+            id="connectionStatus"
+            class="status"
+            role="status"
+            aria-live="polite"
+          >
+            Connecting...
+          </p>
+          <p id="syncStatus" class="small" aria-live="polite">
+            Clock sync pending.
+          </p>
           <label class="device-name" for="deviceNameInput">
             Phone name
-            <input id="deviceNameInput" maxlength="24" autocomplete="nickname" />
+            <input
+              id="deviceNameInput"
+              maxlength="24"
+              autocomplete="nickname"
+            />
           </label>
           <button id="unlockAudioButton" class="primary">Unlock audio</button>
           <button id="syncButton">Run clock sync</button>
           <label class="calibration" for="calibrationInput">
             Speaker calibration: <output id="calibrationValue">0 ms</output>
-            <input id="calibrationInput" type="range" min="-200" max="200" step="1" value="0" />
+            <input
+              id="calibrationInput"
+              type="range"
+              min="-200"
+              max="200"
+              step="1"
+              value="0"
+            />
           </label>
-          <p class="small">Positive values schedule this phone earlier. Use it only to correct an audible lag.</p>
+          <button id="resetCalibrationButton" type="button">
+            Reset calibration
+          </button>
+          <p class="small">
+            Positive values schedule this phone earlier. Use it only to correct
+            an audible lag.
+          </p>
         </article>
 
         <article class="card host-only">
           <h2>Host controls</h2>
           <p class="small">Only this host dashboard can control the session.</p>
           <p id="sessionStatus" class="status">Waiting for phones...</p>
+          <button id="joinLockButton" type="button">Lock new joins</button>
+          <select id="patternSelect">
+            <option value="melody">Melody</option>
+            <option value="clicks">Clicks</option>
+            <option value="alternating">Alternating</option>
+          </select>
+          <label class="audio-upload" for="leadTimeInput"
+            >Playback lead time
+            <input
+              id="leadTimeInput"
+              type="number"
+              min="1"
+              max="10"
+              value="3"
+            />
+            seconds
+          </label>
+          <label class="audio-upload" for="audioUpload"
+            >Load local audio
+            <input id="audioUpload" type="file" accept="audio/*" />
+          </label>
+          <p id="audioStatus" class="small">No audio loaded.</p>
           <button id="playTestButton" class="primary">Sync test</button>
+          <button id="playAssetButton" disabled>Play loaded audio</button>
           <button id="stopButton" class="danger">Stop</button>
         </article>
 
@@ -57,7 +110,7 @@
 
         <article class="card wide host-only">
           <h2>Log</h2>
-          <pre id="log"></pre>
+          <pre id="log" aria-live="polite"></pre>
         </article>
       </section>
     </main>
