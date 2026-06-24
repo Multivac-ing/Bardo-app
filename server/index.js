@@ -94,6 +94,7 @@ function getClientList() {
     assetReady: client.assetReady,
     jitterMs: client.jitterMs,
     syncQuality: client.syncQuality,
+    capabilities: client.capabilities,
     joinsLocked,
     playbackLeadMs,
     selectedPattern,
@@ -178,6 +179,7 @@ io.on("connection", (socket) => {
       assetReady: false,
       jitterMs: null,
       syncQuality: "unknown",
+      capabilities: null,
       cleanupTimeout: null,
     };
 
@@ -331,6 +333,16 @@ io.on("connection", (socket) => {
       ? Math.max(-200, Math.min(200, Math.round(payload.playbackCalibrationMs)))
       : 0;
     current.lastSyncedAt = new Date().toISOString();
+    broadcastClients();
+  });
+
+  socket.on("client:capabilities", (payload = {}) => {
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "phone") return;
+    current.capabilities = {
+      webAudio: Boolean(payload.webAudio),
+      webSocket: Boolean(payload.webSocket),
+    };
     broadcastClients();
   });
 

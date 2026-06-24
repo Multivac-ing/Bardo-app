@@ -70,6 +70,13 @@ function sendProfile() {
   });
 }
 
+function reportCapabilities() {
+  socket.emit("client:capabilities", {
+    webAudio: Boolean(window.AudioContext || window.webkitAudioContext),
+    webSocket: Boolean(window.WebSocket),
+  });
+}
+
 function updateCalibration(value) {
   playbackCalibrationMs = Number(value);
   elements.calibrationInput.value = String(playbackCalibrationMs);
@@ -485,6 +492,7 @@ socket.on("connect", async () => {
   log(`Connected as ${socket.id}.`);
 
   sendProfile();
+  reportCapabilities();
 
   if (isHost) return;
 
