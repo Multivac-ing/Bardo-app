@@ -82,7 +82,10 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
       resolve(match[1]);
     }, 20);
   }).then(async (hostToken) => {
-    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json());
+    const healthResponse = await fetch(`${baseUrl}/api/health`);
+    assert.match(healthResponse.headers.get("content-security-policy"), /default-src 'self'/);
+    assert.equal(healthResponse.headers.get("referrer-policy"), "no-referrer");
+    const health = await healthResponse.json();
     assert.equal(health.status, "ok");
     assert.equal(health.phoneCount, 0);
 

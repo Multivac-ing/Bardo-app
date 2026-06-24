@@ -68,6 +68,13 @@ function broadcastClients() {
   io.emit("server:clients", getClientList());
 }
 
+app.use((_req, res, next) => {
+  res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  next();
+});
+
 app.use(express.static(path.join(projectRoot, "client")));
 
 app.get("/api/health", (_req, res) => {
