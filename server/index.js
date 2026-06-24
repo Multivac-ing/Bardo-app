@@ -20,6 +20,7 @@ const io = new Server(server, { maxHttpBufferSize: MAX_AUDIO_BYTES + 1024 * 1024
 const clients = new Map();
 const hostToken = crypto.randomUUID();
 let currentAsset = null;
+let joinsLocked = false;
 
 function getLanAddresses() {
   const addresses = [];
@@ -61,6 +62,7 @@ function getClientList() {
     assetReady: client.assetReady,
     jitterMs: client.jitterMs,
     syncQuality: client.syncQuality
+    ,joinsLocked
   }));
 }
 
@@ -156,7 +158,21 @@ io.on("connection", (socket) => {
     current.userAgent = String(payload.userAgent || "");
     current.label = String(payload.label || current.label).slice(0, 80);
     current.role = payload.hostToken === hostToken ? "host" : "phone";
+    if (current.role === "phone" && joinsLocked) {
+      socket.emit("server:join-locked");
+      socket.disconnect(true);
+      return;
+    }
     broadcastClients();
+  });
+
+  socket.on("host:set-joins-locked", (locked, ack) => {
+    const respond = typeof ack === "function" ? ack : () => {};
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "host") return respond({ ok: false, message: "Only the host can lock joins." });
+    joinsLocked = Boolean(locked);
+    broadcastClients();
+    respond({ ok: true, joinsLocked });
   });
 
   socket.on("client:ready", (payload = {}) => {

@@ -19,6 +19,7 @@ const elements = {
   audioStatus: document.querySelector("#audioStatus"),
   stopButton: document.querySelector("#stopButton"),
   sessionStatus: document.querySelector("#sessionStatus"),
+  joinLockButton: document.querySelector("#joinLockButton"),
   devices: document.querySelector("#devices"),
   log: document.querySelector("#log")
 };
@@ -35,6 +36,7 @@ let playbackCalibrationMs = Number(localStorage.getItem("bardo-playback-calibrat
 let clockSyncInFlight = false;
 let loadedAsset = null;
 let loadedAudioBuffer = null;
+let joinsLocked = false;
 
 function log(message) {
   const line = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -361,6 +363,14 @@ elements.playTestButton.addEventListener("click", () => {
   });
 });
 
+elements.joinLockButton.addEventListener("click", () => {
+  socket.emit("host:set-joins-locked", !joinsLocked, (result) => {
+    if (!result?.ok) return log(result?.message || "Could not update join lock.");
+    joinsLocked = result.joinsLocked;
+    elements.joinLockButton.textContent = joinsLocked ? "Allow new joins" : "Lock new joins";
+  });
+});
+
 elements.audioUpload.addEventListener("change", () => {
   const file = elements.audioUpload.files[0];
   if (!file) return;
@@ -461,7 +471,14 @@ socket.on("server:hello", (payload) => {
 
 socket.on("server:clients", (devices) => {
   latestDevices = devices;
+  joinsLocked = Boolean(devices[0]?.joinsLocked);
+  if (isHost) elements.joinLockButton.textContent = joinsLocked ? "Allow new joins" : "Lock new joins";
   if (isHost) renderDevices(latestDevices.filter((device) => device.role === "phone"));
+});
+
+socket.on("server:join-locked", () => {
+  elements.connectionStatus.textContent = "This session is not accepting new phones.";
+  socket.disconnect();
 });
 
 socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
