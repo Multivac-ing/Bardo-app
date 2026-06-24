@@ -13,6 +13,9 @@ const elements = {
   calibrationInput: document.querySelector("#calibrationInput"),
   calibrationValue: document.querySelector("#calibrationValue"),
   playTestButton: document.querySelector("#playTestButton"),
+  playAssetButton: document.querySelector("#playAssetButton"),
+  audioUpload: document.querySelector("#audioUpload"),
+  audioStatus: document.querySelector("#audioStatus"),
   stopButton: document.querySelector("#stopButton"),
   sessionStatus: document.querySelector("#sessionStatus"),
   devices: document.querySelector("#devices"),
@@ -29,6 +32,8 @@ let isHost = false;
 let latestDevices = [];
 let playbackCalibrationMs = Number(localStorage.getItem("bardo-playback-calibration-ms") || 0);
 let clockSyncInFlight = false;
+let loadedAsset = null;
+let loadedAudioBuffer = null;
 
 function log(message) {
   const line = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -343,6 +348,30 @@ elements.playTestButton.addEventListener("click", () => {
   });
 });
 
+elements.audioUpload.addEventListener("change", () => {
+  const file = elements.audioUpload.files[0];
+  if (!file) return;
+  if (!file.type.startsWith("audio/") || file.size > 8 * 1024 * 1024) {
+    elements.audioStatus.textContent = "Choose an audio file up to 8 MB.";
+    return;
+  }
+  const reader = new FileReader();
+  elements.audioStatus.textContent = "Uploading audio...";
+  reader.onload = () => socket.emit("host:upload-audio", { name: file.name, type: file.type, data: reader.result }, (result) => {
+    if (result?.ok) {
+      elements.audioStatus.textContent = `Loaded ${result.asset.name}. Waiting for phones to decode it.`;
+      elements.playAssetButton.disabled = false;
+    } else {
+      elements.audioStatus.textContent = result?.message || "Upload failed.";
+    }
+  });
+  reader.readAsArrayBuffer(file);
+});
+
+elements.playAssetButton.addEventListener("click", () => {
+  socket.emit("host:play-asset", (result) => log(result?.ok ? `Audio scheduled for ${result.phoneCount} phone(s).` : result?.message || "Could not play audio."));
+});
+
 elements.stopButton.addEventListener("click", () => {
   socket.emit("host:stop", (result) => {
     if (!result?.ok) log(result?.message || "Could not stop playback.");
@@ -434,6 +463,29 @@ socket.on("server:play-test", async ({ serverStartAt, pattern }) => {
 
   playPatternAt(audioStartTime, pattern);
   log(`Scheduled test in ${Math.round(delaySeconds * 1000)} ms.`);
+});
+
+socket.on("server:asset-loaded", async (asset) => {
+  try {
+    loadedAudioBuffer = await ensureAudioContext().decodeAudioData(asset.data.slice(0));
+    loadedAsset = asset;
+    socket.emit("client:asset-ready", { assetId: asset.id, ready: true });
+    log(`Decoded ${asset.name}.`);
+  } catch {
+    socket.emit("client:asset-ready", { assetId: asset.id, ready: false });
+    log(`Could not decode ${asset.name}.`);
+  }
+});
+
+socket.on("server:play-asset", ({ assetId, serverStartAt }) => {
+  if (!audioUnlocked || !loadedAudioBuffer || loadedAsset?.id !== assetId) return;
+  const delay = Math.max(0.08, (serverStartAt - clockOffsetMs - playbackCalibrationMs - performance.now()) / 1000);
+  clearActiveNodes();
+  const source = ensureAudioContext().createBufferSource();
+  source.buffer = loadedAudioBuffer;
+  source.connect(ensureAudioContext().destination);
+  source.start(ensureAudioContext().currentTime + delay);
+  activeNodes.push(source);
 });
 
 socket.on("server:stop", () => {

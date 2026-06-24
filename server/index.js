@@ -13,11 +13,13 @@ const projectRoot = path.resolve(__dirname, "..");
 const PORT = Number(process.env.PORT || 3000);
 const MAX_CLOCK_SYNC_AGE_MS = 45_000;
 const RECONNECT_GRACE_MS = 10_000;
+const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, { maxHttpBufferSize: MAX_AUDIO_BYTES + 1024 * 1024 });
 const clients = new Map();
 const hostToken = crypto.randomUUID();
+let currentAsset = null;
 
 function getLanAddresses() {
   const addresses = [];
@@ -55,7 +57,8 @@ function getClientList() {
     clockOffsetMs: client.clockOffsetMs,
     latencyMs: client.latencyMs,
     playbackCalibrationMs: client.playbackCalibrationMs,
-    lastSyncedAt: client.lastSyncedAt
+    lastSyncedAt: client.lastSyncedAt,
+    assetReady: client.assetReady
   }));
 }
 
@@ -108,6 +111,7 @@ io.on("connection", (socket) => {
     latencyMs: null,
     playbackCalibrationMs: 0,
     lastSyncedAt: null,
+    assetReady: false,
     cleanupTimeout: null
     };
 
@@ -120,6 +124,9 @@ io.on("connection", (socket) => {
     serverTime: Date.now(),
     joinUrl: getJoinUrl()
   });
+  if (currentAsset && client.role === "phone") {
+    socket.emit("server:asset-loaded", currentAsset);
+  }
   broadcastClients();
 
   socket.on("client:profile", (payload = {}) => {
@@ -157,6 +164,36 @@ io.on("connection", (socket) => {
       ? Math.max(-200, Math.min(200, Math.round(payload.playbackCalibrationMs)))
       : 0;
     current.lastSyncedAt = new Date().toISOString();
+    broadcastClients();
+  });
+
+  socket.on("host:upload-audio", (payload = {}, ack) => {
+    const respond = typeof ack === "function" ? ack : () => {};
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "host") {
+      respond({ ok: false, message: "Only the host can upload audio." });
+      return;
+    }
+    const { name, type, data } = payload;
+    if (!Buffer.isBuffer(data) || !String(type).startsWith("audio/") || data.length > MAX_AUDIO_BYTES) {
+      respond({ ok: false, message: "Use a supported audio file up to 8 MB." });
+      return;
+    }
+    currentAsset = { id: crypto.randomUUID(), name: String(name || "audio").slice(0, 120), type, size: data.length, data };
+    for (const phone of clients.values()) {
+      if (phone.role === "phone") phone.assetReady = false;
+    }
+    for (const phone of clients.values()) {
+      if (phone.role === "phone" && phone.connected) io.to(phone.id).emit("server:asset-loaded", currentAsset);
+    }
+    broadcastClients();
+    respond({ ok: true, asset: { id: currentAsset.id, name: currentAsset.name, size: currentAsset.size } });
+  });
+
+  socket.on("client:asset-ready", (payload = {}) => {
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "phone" || !currentAsset) return;
+    current.assetReady = payload.assetId === currentAsset.id && Boolean(payload.ready);
     broadcastClients();
   });
 
@@ -210,6 +247,19 @@ io.on("connection", (socket) => {
       if (phone.role === "phone") io.to(phone.id).emit("server:stop");
     }
     respond({ ok: true });
+  });
+
+  socket.on("host:play-asset", (ack) => {
+    const respond = typeof ack === "function" ? ack : () => {};
+    const current = clients.get(socket.id);
+    if (!current || current.role !== "host") return respond({ ok: false, message: "Only the host can play audio." });
+    if (!currentAsset) return respond({ ok: false, message: "Upload an audio file first." });
+    const phones = [...clients.values()].filter((client) => client.role === "phone");
+    const unavailable = phones.filter((phone) => !phone.ready || !phone.assetReady || !Number.isFinite(phone.clockOffsetMs));
+    if (!phones.length || unavailable.length) return respond({ ok: false, message: "Every connected phone must be ready and decode the audio." });
+    const serverStartAt = Date.now() + 3000;
+    for (const phone of phones) io.to(phone.id).emit("server:play-asset", { assetId: currentAsset.id, serverStartAt });
+    respond({ ok: true, phoneCount: phones.length });
   });
 
   socket.on("host:kick-device", (payload = {}, ack) => {

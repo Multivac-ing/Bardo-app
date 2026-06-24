@@ -46,7 +46,12 @@
           <h2>Host controls</h2>
           <p class="small">Only this host dashboard can control the session.</p>
           <p id="sessionStatus" class="status">Waiting for phones...</p>
+          <label class="audio-upload" for="audioUpload">Load local audio
+            <input id="audioUpload" type="file" accept="audio/*" />
+          </label>
+          <p id="audioStatus" class="small">No audio loaded.</p>
           <button id="playTestButton" class="primary">Sync test</button>
+          <button id="playAssetButton" disabled>Play loaded audio</button>
           <button id="stopButton" class="danger">Stop</button>
         </article>
 
