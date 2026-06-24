@@ -70,6 +70,15 @@ function broadcastClients() {
 
 app.use(express.static(path.join(projectRoot, "client")));
 
+app.get("/api/health", (_req, res) => {
+  const lanAddresses = getLanAddresses();
+  res.json({
+    status: "ok",
+    lanAvailable: lanAddresses.length > 0,
+    phoneCount: [...clients.values()].filter((client) => client.role === "phone" && client.connected).length
+  });
+});
+
 app.get("/api/config", async (req, res) => {
   const joinUrl = getJoinUrl();
   res.json({

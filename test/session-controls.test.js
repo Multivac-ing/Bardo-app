@@ -82,6 +82,10 @@ test("only the host can control a fully ready phone session", { timeout: 10_000 
       resolve(match[1]);
     }, 20);
   }).then(async (hostToken) => {
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json());
+    assert.equal(health.status, "ok");
+    assert.equal(health.phoneCount, 0);
+
     const host = io(baseUrl, { transports: ["websocket"] });
     const clientId = "reconnectable-phone";
     let phone = io(baseUrl, { transports: ["websocket"], auth: { clientId } });
